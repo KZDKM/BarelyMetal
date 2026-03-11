@@ -103,7 +103,7 @@ let
 
   cpuLower = lib.toLower resolvedCpu;
 
-  patchedQemu = pkgs.callPackage ../../pkgs/qemu {
+  patchedQemu = pkgs.callPackage ../pkgs/qemu {
     inherit autovirt qemu-src;
     cpu = resolvedCpu;
     acpiOemId = resolvedAcpiOemId;
@@ -119,7 +119,7 @@ let
     cfataModel = spoofCfg.cfataModel;
   };
 
-  patchedOvmf = pkgs.callPackage ../../pkgs/ovmf {
+  patchedOvmf = pkgs.callPackage ../pkgs/ovmf {
     inherit autovirt edk2-src;
     cpu = resolvedCpu;
     biosVendor = resolvedBiosVendor;
@@ -134,11 +134,11 @@ let
     bootLogo = spoofCfg.bootLogo;
   };
 
-  smbiosSpoofer = pkgs.callPackage ../../pkgs/smbios-spoofer { inherit autovirt; };
-  barelyMetalUtils = pkgs.callPackage ../../pkgs/utils { inherit autovirt; };
-  barelyMetalProbe = pkgs.callPackage ../../pkgs/probe { };
-  barelyMetalDeploy = pkgs.callPackage ../../pkgs/libvirt-xml { };
-  guestScripts = pkgs.callPackage ../../pkgs/guest-scripts { inherit autovirt; };
+  smbiosSpoofer = pkgs.callPackage ../pkgs/smbios-spoofer { inherit autovirt; };
+  barelyMetalUtils = pkgs.callPackage ../pkgs/utils { inherit autovirt; };
+  barelyMetalProbe = pkgs.callPackage ../pkgs/probe { };
+  barelyMetalDeploy = pkgs.callPackage ../pkgs/libvirt-xml { };
+  guestScripts = pkgs.callPackage ../pkgs/guest-scripts { inherit autovirt; };
 
   stateDir = "/var/lib/barely-metal";
 
