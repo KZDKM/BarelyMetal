@@ -20,8 +20,8 @@ let
   facterLib = import ../lib/facter.nix { inherit lib; };
   inherit (facterLib) firstNonNull;
 
-  hasFacter = (config.hardware.facter.reportPath or null) != null;
-  facterReport = if hasFacter then config.hardware.facter.report else { };
+  hasFacter = config ? facter && config.facter ? reportPath && config.facter.reportPath != null;
+  facterReport = if hasFacter then config.facter.report else { };
 
   probe = cfg.probeData;
   hasProbe = probe != { };
@@ -133,6 +133,47 @@ let
     acpiCreatorRevision = resolvedAcpiCreatorRevision;
     bootLogo = spoofCfg.bootLogo;
   };
+
+  # Wrap patchedQemu so its firmware JSON descriptors point to our patched OVMF.
+  # This is how modern nixpkgs libvirtd discovers OVMF (no more ovmf.packages option).
+  qemuWithOvmf = pkgs.runCommand "qemu-with-patched-ovmf" {
+    nativeBuildInputs = [ pkgs.jq ];
+  } ''
+    mkdir -p $out
+    # Symlink everything from the patched QEMU
+    for item in ${patchedQemu}/*; do
+      ln -s "$item" "$out/$(basename "$item")"
+    done
+    # Override share/qemu/firmware with our patched OVMF paths
+    rm -f $out/share
+    mkdir -p $out/share
+    for item in ${patchedQemu}/share/*; do
+      if [ "$(basename "$item")" = "qemu" ]; then
+        mkdir -p $out/share/qemu
+        for qitem in ${patchedQemu}/share/qemu/*; do
+          if [ "$(basename "$qitem")" = "firmware" ]; then
+            mkdir -p $out/share/qemu/firmware
+            for f in ${patchedQemu}/share/qemu/firmware/*.json; do
+              fname="$(basename "$f")"
+              # Rewrite firmware paths to point to our patched OVMF
+              jq \
+                --arg code "${patchedOvmf}/FV/OVMF_CODE.fd" \
+                --arg vars "${patchedOvmf}/FV/OVMF_VARS.fd" \
+                'if .mapping.executable.filename then
+                   .mapping.executable.filename = $code |
+                   .mapping."nvram-template".filename = $vars
+                 else . end' \
+                "$f" > "$out/share/qemu/firmware/$fname"
+            done
+          else
+            ln -s "$qitem" "$out/share/qemu/$(basename "$qitem")"
+          fi
+        done
+      else
+        ln -s "$item" "$out/share/$(basename "$item")"
+      fi
+    done
+  '';
 
   smbiosSpoofer = pkgs.callPackage ../pkgs/smbios-spoofer { inherit autovirt; };
   barelyMetalUtils = pkgs.callPackage ../pkgs/utils { inherit autovirt; };
@@ -408,8 +449,7 @@ in
     virtualisation.libvirtd = {
       enable = true;
       qemu = {
-        package = patchedQemu;
-        ovmf.packages = [ patchedOvmf ];
+        package = qemuWithOvmf;
         swtpm.enable = true;
         verbatimConfig = ''
           user = "root"
@@ -442,7 +482,7 @@ in
 
     environment.systemPackages =
       [
-        patchedQemu
+        qemuWithOvmf
         smbiosSpoofer
         barelyMetalProbe
         deployWrapper

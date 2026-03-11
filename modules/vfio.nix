@@ -10,8 +10,8 @@ let
   mainCfg = config.barelyMetal;
   facterLib = import ../lib/facter.nix { inherit lib; };
 
-  hasFacter = (config.hardware.facter.reportPath or null) != null;
-  facterReport = if hasFacter then config.hardware.facter.report else { };
+  hasFacter = config ? facter && config.facter ? reportPath && config.facter.reportPath != null;
+  facterReport = if hasFacter then config.facter.report else { };
 
   probe = mainCfg.probeData;
   hasProbe = probe != { };
