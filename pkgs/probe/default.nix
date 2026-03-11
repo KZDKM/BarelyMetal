@@ -111,16 +111,27 @@ writeShellApplication {
       CPU_VENDOR="amd"
     fi
 
-    # --- Battery SSDT (laptop detection) ---
+    # --- Battery detection ---
     HAS_BATTERY=false
     BATTERY_SSDT=""
-    for ssdt in /sys/firmware/acpi/tables/SSDT*; do
-      if [ -f "$ssdt" ] && grep -qa -e "Battery" -e "BAT0" -e "BAT1" "$ssdt" 2>/dev/null; then
+
+    # Primary: check sysfs power supply (most reliable)
+    for ps in /sys/class/power_supply/*/type; do
+      if [ -f "$ps" ] && [ "$(cat "$ps" 2>/dev/null)" = "Battery" ]; then
         HAS_BATTERY=true
-        BATTERY_SSDT="$ssdt"
         break
       fi
     done
+
+    # Find the ACPI table containing the battery definition (DSDT or SSDT)
+    if [ "$HAS_BATTERY" = true ]; then
+      for tbl in /sys/firmware/acpi/tables/DSDT /sys/firmware/acpi/tables/SSDT*; do
+        if [ -f "$tbl" ] && grep -qa -e "BAT0" -e "BAT1" -e "PNP0C0A" "$tbl" 2>/dev/null; then
+          BATTERY_SSDT="$tbl"
+          break
+        fi
+      done
+    fi
 
     # --- Build JSON with jq for proper escaping ---
     JSON=$(jq -n \
