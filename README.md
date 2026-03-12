@@ -13,7 +13,7 @@ BarelyMetal patches QEMU and OVMF/EDK2 at build time with your host's real hardw
 - **SMBIOS spoofing** — Dumps your host's real DMI tables at boot, scrubs UUIDs and serial numbers, and passes them to QEMU so the guest sees your actual motherboard/BIOS identity
 - **VFIO GPU passthrough** — Declarative kernel params, modprobe config, driver blacklisting, with auto-detection from [nix-facter](https://github.com/numtide/nixos-facter)
 - **VM deployment** — A `virt-install` wrapper that generates the full anti-detection XML: `kvm.hidden`, PMU off, VMPort off, MSR faulting, PS/2 disabled, CPU host-passthrough with hypervisor bit cleared, native TSC, disabled kvmclock, S3/S4 power states, NVMe with random serial, e1000e with spoofed MAC, evdev input, PipeWire audio, TPM emulation, optional Hyper-V passthrough
-- **CachyOS kernel** — Optional integration with [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) to apply the AutoVirt SVM/RDTSC timing patch
+- **Kernel patch** — SVM/RDTSC timing patch. Tested with [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), should work on default kernel
 - **Looking Glass** — KVMFR shared memory display with spoofed module vendor IDs
 - **Network anti-fingerprinting** — Randomizes the libvirt bridge MAC and changes the DHCP subnet away from the detectable `192.168.122.x` default
 - **Windows guest scripts** — Bundled PowerShell scripts for in-guest cleanup (registry QEMU artifacts, EDID serial scrubbing, machine ID randomization)
