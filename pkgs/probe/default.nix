@@ -180,8 +180,21 @@ writeShellApplication {
 
     if [ -n "$OUTPUT" ]; then
       echo "$JSON" > "$OUTPUT"
+      OUTPUT_DIR=$(dirname "$OUTPUT")
+
+      # Extract UEFI boot logo (BGRT) if available
+      BGRT_IMAGE="/sys/firmware/acpi/bgrt/image"
+      if [ -f "$BGRT_IMAGE" ]; then
+        LOGO_PATH="$OUTPUT_DIR/boot-logo.bmp"
+        cp "$BGRT_IMAGE" "$LOGO_PATH"
+        echo "Boot logo saved to: $LOGO_PATH" >&2
+        echo "Add to your NixOS config:  barelyMetal.spoofing.bootLogo = ./boot-logo.bmp;" >&2
+      else
+        echo "Warning: No BGRT boot logo found at $BGRT_IMAGE" >&2
+      fi
+
       echo "Probe written to: $OUTPUT" >&2
-      echo "Add to your NixOS config:  barelyMetal.probeFile = ./$OUTPUT;" >&2
+      echo "Add to your NixOS config:  barelyMetal.probeData = builtins.fromJSON (builtins.readFile ./$OUTPUT);" >&2
     else
       echo "$JSON"
     fi
