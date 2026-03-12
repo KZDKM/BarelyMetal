@@ -209,11 +209,34 @@ let
       "$@"
   '';
 
+  # Compile ACPI DSL tables with host OEM IDs patched in
+  compiledAcpiTables = pkgs.runCommand "barely-metal-acpi-tables" {
+    nativeBuildInputs = [ pkgs.acpica-tools pkgs.gnused ];
+  } ''
+    mkdir -p $out
+
+    compile_dsl() {
+      local src="$1" name="$2"
+      local patched="$name.dsl"
+      cp "$src" "$patched"
+
+      # Patch OEM ID and OEM Table ID in DefinitionBlock to match host
+      sed -i -E \
+        's/(DefinitionBlock\s*\(\s*"[^"]*"\s*,\s*"SSDT"\s*,\s*[0-9]+\s*,\s*)"[^"]*"(\s*,\s*)"[^"]*"/\1"${resolvedAcpiOemId}"\2"${resolvedAcpiOemTableId}"/' \
+        "$patched"
+
+      iasl -p "$out/$name" "$patched"
+    }
+
+    compile_dsl "${guestScripts}/share/barely-metal/acpi/fake_battery.dsl" "fake_battery"
+    compile_dsl "${guestScripts}/share/barely-metal/acpi/spoofed_devices.dsl" "spoofed_devices"
+  '';
+
   # Resolve ACPI tables: user-specified + bundled fake battery + bundled spoofed devices
   resolvedAcpiTables =
     vmCfg.acpiTables
-    ++ lib.optional vmCfg.useFakeBattery "${guestScripts}/share/barely-metal/acpi/fake_battery.dsl"
-    ++ lib.optional vmCfg.useSpoofedDevices "${guestScripts}/share/barely-metal/acpi/spoofed_devices.aml";
+    ++ lib.optional vmCfg.useFakeBattery "${compiledAcpiTables}/fake_battery.aml"
+    ++ lib.optional vmCfg.useSpoofedDevices "${compiledAcpiTables}/spoofed_devices.aml";
 in
 {
   options.barelyMetal = {
