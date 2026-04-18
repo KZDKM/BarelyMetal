@@ -515,7 +515,7 @@ in
             "/dev/random", "/dev/urandom",
             "/dev/ptmx", "/dev/kvm",
             "/dev/rtc", "/dev/hpet",
-            "/dev/sev"
+            "/dev/sev", "/dev/kvmfr0"
             ${lib.concatMapStringsSep "" (d: ",\n    \"${d}\"") vmCfg.evdevInputs}
           ]
         '';

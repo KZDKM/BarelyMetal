@@ -79,6 +79,7 @@ in
 
     systemd.tmpfiles.rules = [
       "f /dev/shm/looking-glass 0660 ${cfg.user} ${cfg.group} -"
+      "f /dev/kvmfr0 0660 ${cfg.user} ${cfg.group} -"
     ];
 
     boot.extraModprobeConfig = ''
