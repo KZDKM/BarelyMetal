@@ -689,6 +689,19 @@ index c9cb8f77..bf99152d 100644
      k->device_id = PCI_DEVICE_ID_INTEL_ICH9_8;
      k->revision = ICH9_A2_LPC_REVISION;
      k->class_id = PCI_CLASS_BRIDGE_ISA;
+diff --git a/hw/misc/ivshmem-pci.c b/hw/misc/ivshmem-pci.c
+index 636d0b83..e0b8603f 100644
+--- a/hw/misc/ivshmem-pci.c
++++ b/hw/misc/ivshmem-pci.c
+@@ -41,7 +41,7 @@
+ #include "qom/object.h"
+ 
+ #define PCI_VENDOR_ID_IVSHMEM   PCI_VENDOR_ID_REDHAT_QUMRANET
+-#define PCI_DEVICE_ID_IVSHMEM   0x1110
++#define PCI_DEVICE_ID_IVSHMEM   0x42FE
+ 
+ #define IVSHMEM_MAX_PEERS UINT16_MAX
+ #define IVSHMEM_IOEVENTFD   0
 diff --git a/hw/misc/pvpanic-isa.c b/hw/misc/pvpanic-isa.c
 index f7b421c7..881cf2b4 100644
 --- a/hw/misc/pvpanic-isa.c
@@ -1560,38 +1573,3 @@ index 9c25b558..af64a32e 100644
      { "x2apic", "on" },
      { "kvm-msi-ext-dest-id", "off" },
      { "acpi", "off" },
-diff --git a/target/i386/kvm/kvm.c b/target/i386/kvm/kvm.c
-index 60c79811..d7416ec1 100644
---- a/target/i386/kvm/kvm.c
-+++ b/target/i386/kvm/kvm.c
-@@ -3252,6 +3252,19 @@ static int kvm_vm_enable_energy_msrs(KVMState *s)
-     return 0;
- }
- 
-+static int kvm_vm_disable_hypercall_patching(KVMState *s)
-+{
-+    int valid_quirks = kvm_vm_check_extension(s, KVM_CAP_DISABLE_QUIRKS2);
-+
-+    if (valid_quirks & KVM_X86_QUIRK_FIX_HYPERCALL_INSN) {
-+        return kvm_vm_enable_cap(s, KVM_CAP_DISABLE_QUIRKS2, 0,
-+                                 KVM_X86_QUIRK_FIX_HYPERCALL_INSN);
-+    }
-+
-+    warn_report("kvm: disabling hypercall patching not supported");
-+    return 0;
-+}
-+
- int kvm_arch_init(MachineState *ms, KVMState *s)
- {
-     int ret;
-@@ -3390,6 +3403,10 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
-         }
-     }
- 
-+    if (kvm_vm_disable_hypercall_patching(s)) {
-+        warn_report("kvm: failed to disable hypercall patching quirk");
-+    }
-+
-     return 0;
- }
- 

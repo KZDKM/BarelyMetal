@@ -23,12 +23,14 @@ let
   # Spoof as a plausible host-vendor PCI device so ivshmem doesn't
   # stick out as Red Hat VirtIO (0x1af4:0x1110).
   spoofedVendorId = if resolvedCpu == "intel" then "0x8086" else "0x1022";
-  spoofedDeviceId = if resolvedCpu == "intel" then "0x0E20" else "0x1110";
+  spoofedDeviceId = if resolvedCpu == "intel" then "0x0E20" else "0x42FE";
 
   baseKvmfr = config.boot.kernelPackages.kvmfr;
 
   patchedKvmfr = baseKvmfr.overrideAttrs (old: {
     postPatch = (old.postPatch or "") + ''
+      echo '${spoofedVendorId}'
+      echo '${spoofedDeviceId}'
       substituteInPlace kvmfr.c \
         --replace-fail '#define PCI_KVMFR_VENDOR_ID 0x1af4' \
                        '#define PCI_KVMFR_VENDOR_ID ${spoofedVendorId}' \

@@ -21,7 +21,7 @@ let
   cpuLower = lib.toLower cpu;
   patchFile =
     if cpuLower == "amd" then
-      "${autovirt}/patches/QEMU/AMD-v10.2.0.patch"
+      "${./qemu.patch}"
     else
       "${autovirt}/patches/QEMU/Intel-v10.2.0.patch";
 
