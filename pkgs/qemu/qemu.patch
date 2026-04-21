@@ -1,8 +1,71 @@
+diff --git a/hw/acpi/Kconfig b/hw/acpi/Kconfig
+index daabbe6c..acf64985 100644
+--- a/hw/acpi/Kconfig
++++ b/hw/acpi/Kconfig
+@@ -4,6 +4,7 @@ config ACPI
+ config ACPI_X86
+     bool
+     select ACPI
++    select ACPI_CPPC
+     select ACPI_NVDIMM
+     select ACPI_CXL
+     select ACPI_CPU_HOTPLUG
+@@ -21,6 +22,10 @@ config ACPI_ICH9
+ config ACPI_CPU_HOTPLUG
+     bool
+ 
++config ACPI_CPPC
++    bool
++    depends on ACPI && ACPI_CPU_HOTPLUG
++
+ config ACPI_MEMORY_HOTPLUG
+     bool
+     select MEM_DEVICE
 diff --git a/hw/acpi/aml-build.c b/hw/acpi/aml-build.c
-index 2d5826a8..7cd88c2f 100644
+index 2d5826a8..88530f48 100644
 --- a/hw/acpi/aml-build.c
 +++ b/hw/acpi/aml-build.c
-@@ -1722,11 +1722,11 @@ void acpi_table_begin(AcpiTable *desc, GArray *array)
+@@ -989,6 +989,39 @@ Aml *aml_memory32_fixed(uint32_t addr, uint32_t size,
+     return var;
+ }
+ 
++/*
++ * ACPI 6.4: 6.4.3.7 Generic Register Descriptor
++ * (Type 1, Large Item Name 0x2)
++ *
++ *   @access_width must be one of AML_(ANY|BYTE|WORD|DWORD|QWORD)_ACC
++ */
++Aml *aml_generic_register(AmlAddressSpace address_space,
++                      uint8_t bit_width, uint8_t bit_offset,
++                      AmlAccessType access_size,
++                      uint64_t address)
++{
++    Aml *var = aml_alloc();
++    build_append_byte(var->buf, 0x82); /* Generic Register Descriptor */
++    build_append_byte(var->buf, 12); /* Length, bits[7:0] value = 12 */
++    build_append_byte(var->buf, 0);  /* Length, bits[15:8] value = 0 */
++
++    build_append_byte(var->buf, address_space); /* Register address space */
++    build_append_byte(var->buf, bit_width);  /* Register bit width */
++    build_append_byte(var->buf, bit_offset); /* Register bit offset */
++    build_append_byte(var->buf, access_size); /* Access width (size) */
++
++    /* Register address */
++    build_append_byte(var->buf, extract64(address, 0, 8));  /* bits[7:0] */
++    build_append_byte(var->buf, extract64(address, 8, 8));  /* bits[15:8] */
++    build_append_byte(var->buf, extract64(address, 16, 8)); /* bits[23:16] */
++    build_append_byte(var->buf, extract64(address, 24, 8)); /* bits[31:24] */
++    build_append_byte(var->buf, extract64(address, 32, 8)); /* bits[39:32] */
++    build_append_byte(var->buf, extract64(address, 40, 8)); /* bits[47:40] */
++    build_append_byte(var->buf, extract64(address, 48, 8)); /* bits[55:48] */
++    build_append_byte(var->buf, extract64(address, 56, 8)); /* bits[63:56] */
++    return var;
++}
++
+ /*
+  * ACPI 5.0: 6.4.3.6 Extended Interrupt Descriptor
+  * Type 1, Large Item Name 0x9
+@@ -1722,11 +1755,11 @@ void acpi_table_begin(AcpiTable *desc, GArray *array)
      build_append_int_noprefix(array, 0, 4); /* Length */
      build_append_int_noprefix(array, desc->rev, 1); /* Revision */
      build_append_int_noprefix(array, 0, 1); /* Checksum */
@@ -17,7 +80,7 @@ index 2d5826a8..7cd88c2f 100644
      build_append_int_noprefix(array, 1, 4); /* Creator Revision */
  }
  
-@@ -2263,7 +2263,7 @@ void build_fadt(GArray *tbl, BIOSLinker *linker, const AcpiFadtData *f,
+@@ -2263,7 +2296,7 @@ void build_fadt(GArray *tbl, BIOSLinker *linker, const AcpiFadtData *f,
      /* ACPI1.0: INT_MODEL, ACPI2.0+: Reserved */
      build_append_int_noprefix(tbl, f->int_model /* Multiple APIC */, 1);
      /* Preferred_PM_Profile */
@@ -26,7 +89,7 @@ index 2d5826a8..7cd88c2f 100644
      build_append_int_noprefix(tbl, f->sci_int, 2); /* SCI_INT */
      build_append_int_noprefix(tbl, f->smi_cmd, 4); /* SMI_CMD */
      build_append_int_noprefix(tbl, f->acpi_enable_cmd, 1); /* ACPI_ENABLE */
-@@ -2360,7 +2360,7 @@ void build_fadt(GArray *tbl, BIOSLinker *linker, const AcpiFadtData *f,
+@@ -2360,7 +2393,7 @@ void build_fadt(GArray *tbl, BIOSLinker *linker, const AcpiFadtData *f,
      }
  
      /* Hypervisor Vendor Identity */
@@ -35,6 +98,150 @@ index 2d5826a8..7cd88c2f 100644
  
      /* TODO: extra fields need to be added to support revisions above rev6 */
      assert(f->rev == 6);
+diff --git a/hw/acpi/cpu.c b/hw/acpi/cpu.c
+index 6f1ae79e..af167960 100644
+--- a/hw/acpi/cpu.c
++++ b/hw/acpi/cpu.c
+@@ -1,6 +1,9 @@
+ #include "qemu/osdep.h"
+ #include "migration/vmstate.h"
+ #include "hw/acpi/cpu.h"
++#include "hw/acpi/cppc.h"
++#include "hw/acpi/ghes.h"
++#include "hw/acpi/generic_event_device.h"
+ #include "hw/core/cpu.h"
+ #include "qapi/error.h"
+ #include "qapi/qapi-events-acpi.h"
+@@ -349,6 +352,7 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+     Aml *method;
+     Aml *cpu_ctrl_dev;
+     Aml *cpus_dev;
++    Aml *platform_osc;
+     Aml *zero = aml_int(0);
+     Aml *one = aml_int(1);
+     Aml *sb_scope = aml_scope("_SB");
+@@ -421,6 +425,66 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+     }
+     aml_append(sb_scope, cpu_ctrl_dev);
+ 
++    platform_osc = aml_method("_OSC", 4, AML_SERIALIZED);
++    {
++        /* ACPI 6.5, 6.2.11.2 Platform-Wide OSPM Capabilities */
++        Aml *if_ctx;
++        Aml *if_ctx2;
++        Aml *else_ctx;
++        Aml *a_cdw1 = aml_name("CDW1");
++        Aml *a_cdw2 = aml_name("CDW2");
++        Aml *a_cdw2_masked = aml_local(0);
++        uint32_t dw2_mask = (1<<3) /* Insertion / Ejection _OST Processing Support*/
++                            | ((acpi_ghes_get_state() != NULL) ? (1<<4) : 0) /* APEI Support */
++                            /* CPPC, CPPC2, Diverse CPPC Highest Optimization,
++                             * Flexible Address Space for CPPC Registers */
++                            | ((cppc_get_device() != NULL) ? (0x5060) : 0)
++                            | (acpi_ged_present() ? (1<<11) : 0)
++                            /* (Extended Interrupt Descriptor has no ResourceSource) */
++                            | (0<<13)
++                            /* (No SRAT Generic Initiator objects present,
++                             *  no need to mask off) */
++                            | (1<<17)
++                            /* (PCI BAR Target GAS not in use,
++                             *  no need to mask off) */
++                            | (1<<20)
++                            /* (Platform Runtime Mechanism not in use,
++                             *  no need to mask off) */
++                            | (1<<21)
++                            /* (Functional Fixed Hardware Operation Regions
++                             *  not in use, no need to mask off) */
++                            | (1<<22);
++
++        aml_append(platform_osc, aml_create_dword_field(aml_arg(3), aml_int(0), "CDW1"));
++
++        if_ctx = aml_if(aml_equal(
++            aml_arg(0), aml_touuid("0811B06E-4A27-44F9-8D60-3CBBC22E7B48")));
++        aml_append(if_ctx, aml_create_dword_field(aml_arg(3), aml_int(4), "CDW2"));
++
++        if_ctx2 = aml_if(aml_lnot(aml_equal(aml_arg(1), aml_int(1))));
++        /* Unknown revision */
++        aml_append(if_ctx2, aml_or(a_cdw1, aml_int(0x08), a_cdw1));
++        aml_append(if_ctx, if_ctx2);
++
++        aml_append(if_ctx, aml_and(a_cdw2, aml_int(dw2_mask), a_cdw2_masked));
++
++        if_ctx2 = aml_if(aml_lnot(aml_equal(a_cdw2, a_cdw2_masked)));
++        /* Capabilities Masked */
++        aml_append(if_ctx2, aml_or(a_cdw1, aml_int(0x10), a_cdw1));
++        aml_append(if_ctx, if_ctx2);
++
++        aml_append(if_ctx, aml_store(a_cdw2_masked, a_cdw2));
++        aml_append(platform_osc, if_ctx);
++
++        else_ctx = aml_else();
++        /* Unrecognized UUID */
++        aml_append(else_ctx, aml_or(a_cdw1, aml_int(4), a_cdw1));
++        aml_append(platform_osc, else_ctx);
++
++        aml_append(platform_osc, aml_return(aml_arg(3)));
++    }
++    aml_append(sb_scope, platform_osc);
++
+     cpus_dev = aml_device("\\_SB.CPUS");
+     {
+         int i;
+@@ -723,6 +787,10 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+                            aml_int(arch_ids->cpus[i].props.node_id)));
+             }
+ 
++            if (cppc_get_device() != NULL) {
++                cppc_aml(dev, i, cppc_get_device());
++            }
++
+             aml_append(cpus_dev, dev);
+         }
+     }
+diff --git a/hw/acpi/generic_event_device.c b/hw/acpi/generic_event_device.c
+index e7b773d8..34047f4d 100644
+--- a/hw/acpi/generic_event_device.c
++++ b/hw/acpi/generic_event_device.c
+@@ -628,3 +628,10 @@ static void acpi_ged_register_types(void)
+ }
+ 
+ type_init(acpi_ged_register_types)
++
++bool acpi_ged_present(void)
++{
++    AcpiGedState *acpi_ged_state = ACPI_GED(object_resolve_path_type("", TYPE_ACPI_GED,
++                                                                     NULL));
++    return (acpi_ged_state != NULL);
++}
+diff --git a/hw/acpi/meson.build b/hw/acpi/meson.build
+index 56b5d1ec..4ab59ab2 100644
+--- a/hw/acpi/meson.build
++++ b/hw/acpi/meson.build
+@@ -1,4 +1,5 @@
+ acpi_ss = ss.source_set()
++acpi_specific_ss = ss.source_set()
+ acpi_ss.add(files(
+   'acpi_interface.c',
+   'aml-build.c',
+@@ -6,6 +7,8 @@ acpi_ss.add(files(
+   'core.c',
+   'utils.c',
+ ))
++acpi_specific_ss.add(when: 'CONFIG_ACPI_CPPC', if_true: files('cppc.c'))
++acpi_ss.add(when: 'CONFIG_ACPI_CPPC', if_false: files('acpi-cppc-stub.c'))
+ acpi_ss.add(when: 'CONFIG_ACPI_CPU_HOTPLUG', if_true: files('cpu.c', 'cpu_hotplug.c'))
+ acpi_ss.add(when: 'CONFIG_ACPI_CPU_HOTPLUG', if_false: files('acpi-cpu-hotplug-stub.c'))
+ acpi_ss.add(when: 'CONFIG_ACPI_MEMORY_HOTPLUG', if_true: files('memory_hotplug.c'))
+@@ -34,6 +37,7 @@ endif
+ system_ss.add(when: 'CONFIG_ACPI', if_false: files('acpi-stub.c', 'aml-build-stub.c', 'ghes-stub.c', 'acpi_interface.c'))
+ system_ss.add(when: 'CONFIG_ACPI_PCI_BRIDGE', if_false: files('pci-bridge-stub.c'))
+ system_ss.add_all(when: 'CONFIG_ACPI', if_true: acpi_ss)
++specific_ss.add_all(when: 'CONFIG_ACPI', if_true: acpi_specific_ss)
+ system_ss.add(when: 'CONFIG_GHES_CPER', if_true: files('ghes_cper.c'))
+ system_ss.add(when: 'CONFIG_GHES_CPER', if_false: files('ghes_cper_stub.c'))
+-system_ss.add(files('acpi-qmp-cmds.c'))
++system_ss.add(files('acpi-qmp-cmds.c'))
+\ No newline at end of file
 diff --git a/hw/acpi/pcihp.c b/hw/acpi/pcihp.c
 index 4922bbc7..2b86b9d3 100644
 --- a/hw/acpi/pcihp.c
@@ -235,6 +442,100 @@ index 758e130c..4efc20c6 100644
      set_bit(DEVICE_CATEGORY_SOUND, dc->categories);
      dc->desc = "Intel HD Audio Controller (ich9)";
  }
+diff --git a/hw/core/qdev-properties-system.c b/hw/core/qdev-properties-system.c
+index 7aa5cbb5..a9633223 100644
+--- a/hw/core/qdev-properties-system.c
++++ b/hw/core/qdev-properties-system.c
+@@ -32,6 +32,7 @@
+ #include "system/block-backend.h"
+ #include "system/blockdev.h"
+ #include "net/net.h"
++#include "hw/acpi/cppc.h"
+ #include "hw/pci/pci.h"
+ #include "hw/pci/pcie.h"
+ #include "hw/i386/x86.h"
+@@ -1341,3 +1342,81 @@ const PropertyInfo qdev_prop_virtio_gpu_output_list = {
+     .set = set_virtio_gpu_output_list,
+     .release = release_virtio_gpu_output_list,
+ };
++
++/* --- CPPC --- */
++
++/*
++ * Accepted syntax:
++ *   <vcpu>:<highest>(:<nominal>(:<lowest_nonlinear>(:<lowest>)))
++ *   where vcpu is uint32_t, and the CPPC metrics are uint16_t,
++ *   encoded as decimal.
++ * The optional metrics are, if not given, set to the last given value.
++ */
++static void get_cppc_processor_caps(Object *obj, Visitor *v, const char *name,
++                                void *opaque, Error **errp)
++{
++    Property *prop = opaque;
++    CPPCProcessorCaps *caps = object_field_prop_ptr(obj, prop);
++    char buffer[64];
++    char *p = buffer;
++    int rc;
++
++    rc = snprintf(buffer, sizeof(buffer), "%"PRIu32":%"PRIu32":%"PRIu16":%"PRIu16":%"PRIu16":%"PRIu16,
++                  caps->vcpu,
++                  caps->main_vcpu,
++                  caps->highest_performance,
++                  caps->nominal_performance,
++                  caps->lowest_nonlinear_performance,
++                  caps->lowest_performance);
++    assert(rc < sizeof(buffer));
++
++    visit_type_str(v, name, &p, errp);
++}
++
++#include "trace.h"
++
++static void set_cppc_processor_caps(Object *obj, Visitor *v, const char *name,
++                                void *opaque, Error **errp)
++{
++    Property *prop = opaque;
++    CPPCProcessorCaps *caps = object_field_prop_ptr(obj, prop);
++    char *str;
++    int n;
++
++    if (!visit_type_str(v, name, &str, errp)) {
++        return;
++    }
++
++    n = sscanf(str, "%"SCNu32":%"SCNu32":%"SCNu16":%"SCNu16":%"SCNu16":%"SCNu16,
++                 &caps->vcpu,
++                 &caps->main_vcpu,
++                 &caps->highest_performance,
++                 &caps->nominal_performance,
++                 &caps->lowest_nonlinear_performance,
++                 &caps->lowest_performance);
++    if (n < 2) {
++        error_set_from_qdev_prop_error(errp, EINVAL, obj, name, str);
++        goto out;
++    }
++    if (n <= 2) {
++        caps->nominal_performance = caps->highest_performance;
++    }
++    if (n <= 3) {
++        caps->lowest_nonlinear_performance = caps->nominal_performance;
++    }
++    if (n <= 4) {
++        caps->lowest_performance = caps->lowest_nonlinear_performance;
++    }
++    goto out;
++
++out:
++    g_free(str);
++    return;
++}
++
++const PropertyInfo qdev_prop_cppc_processor_caps = {
++    .type  = "str",
++    .description = "Colon-separated tuple of vCPU and corresponding CPPC performance capabilities",
++    .get   = get_cppc_processor_caps,
++    .set   = set_cppc_processor_caps
++};
 diff --git a/hw/core/qdev.c b/hw/core/qdev.c
 index ce0ee9fc..a5480135 100644
 --- a/hw/core/qdev.c
@@ -1358,7 +1659,7 @@ index 3368ac89..bcc5c28f 100644
      dc->bus_type = TYPE_AP_BUS;
  
 diff --git a/include/hw/acpi/aml-build.h b/include/hw/acpi/aml-build.h
-index f38e1297..e346f2db 100644
+index f38e1297..bf1ce43a 100644
 --- a/include/hw/acpi/aml-build.h
 +++ b/include/hw/acpi/aml-build.h
 @@ -4,8 +4,8 @@
@@ -1372,6 +1673,36 @@ index f38e1297..e346f2db 100644
  
  #define ACPI_BUILD_TABLE_FILE "etc/acpi/tables"
  #define ACPI_BUILD_RSDP_FILE "etc/acpi/rsdp"
+@@ -80,6 +80,7 @@ typedef enum {
+     AML_AS_PCI_CONFIG = 0X02,
+     AML_AS_EMBEDDED_CTRL = 0X03,
+     AML_AS_SMBUS = 0X04,
++    AML_AS_PCC = 0x0A,
+     AML_AS_FFH = 0X7F,
+ } AmlAddressSpace;
+ 
+@@ -333,6 +334,10 @@ Aml *aml_gpio_int(AmlConsumerAndProducer con_and_pro,
+                   const uint8_t *vendor_data, uint16_t vendor_data_len);
+ Aml *aml_memory32_fixed(uint32_t addr, uint32_t size,
+                         AmlReadAndWrite read_and_write);
++Aml *aml_generic_register(AmlAddressSpace address_space,
++                          uint8_t bit_width, uint8_t bit_offset,
++                          AmlAccessType access_size,
++                          uint64_t address);
+ Aml *aml_interrupt(AmlConsumerAndProducer con_and_pro,
+                    AmlLevelAndEdge level_and_edge,
+                    AmlActiveHighAndLow high_and_low, AmlShared shared,
+diff --git a/include/hw/acpi/generic_event_device.h b/include/hw/acpi/generic_event_device.h
+index 130c014d..4c2425b7 100644
+--- a/include/hw/acpi/generic_event_device.h
++++ b/include/hw/acpi/generic_event_device.h
+@@ -139,5 +139,6 @@ typedef struct AcpiGedClass {
+ void build_ged_aml(Aml *table, const char* name, HotplugHandler *hotplug_dev,
+                    uint32_t ged_irq, AmlRegionSpace rs, hwaddr ged_base);
+ void acpi_dsdt_add_power_button(Aml *scope);
++bool acpi_ged_present(void);
+ 
+ #endif
 diff --git a/include/hw/pci/pci.h b/include/hw/pci/pci.h
 index b72e4845..01edc0a3 100644
 --- a/include/hw/pci/pci.h
@@ -1480,6 +1811,27 @@ index 16034aaa..2bae16ea 100644
  
  #define PCI_VENDOR_ID_XEN                0x5853
  #define PCI_DEVICE_ID_XEN_PLATFORM       0x0001
+diff --git a/include/hw/qdev-properties-system.h b/include/hw/qdev-properties-system.h
+index 45687be0..9ef78e51 100644
+--- a/include/hw/qdev-properties-system.h
++++ b/include/hw/qdev-properties-system.h
+@@ -33,6 +33,7 @@ extern const PropertyInfo qdev_prop_iothread_vq_mapping_list;
+ extern const PropertyInfo qdev_prop_endian_mode;
+ extern const PropertyInfo qdev_prop_vmapple_virtio_blk_variant;
+ extern const PropertyInfo qdev_prop_virtio_gpu_output_list;
++extern const PropertyInfo qdev_prop_cppc_processor_caps;
+ 
+ #define DEFINE_PROP_PCI_DEVFN(_n, _s, _f, _d)                   \
+     DEFINE_PROP_SIGNED(_n, _s, _f, _d, qdev_prop_pci_devfn, int32_t)
+@@ -115,4 +116,8 @@ extern const PropertyInfo qdev_prop_virtio_gpu_output_list;
+     DEFINE_PROP(_name, _state, _field, qdev_prop_virtio_gpu_output_list, \
+                 VirtIOGPUOutputList *)
+ 
++#define DEFINE_PROP_CPPC_PROCESSOR_CAPS(_name, _state, _field) \
++    DEFINE_PROP(_name, _state, _field, qdev_prop_cppc_processor_caps, CPPCProcessorCaps)
++
++
+ #endif
 diff --git a/include/hw/southbridge/ich9.h b/include/hw/southbridge/ich9.h
 index 2c35dd04..87d0cfb2 100644
 --- a/include/hw/southbridge/ich9.h
@@ -1537,11 +1889,107 @@ index 7bcdf0ee..02dd06eb 100644
  
  #define BIOS_CFG_DMA_ADDR_HIGH  0x514
  #define BIOS_CFG_DMA_ADDR_LOW   0x518
+diff --git a/system/vl.c b/system/vl.c
+index 5091fe52..9ce38412 100644
+--- a/system/vl.c
++++ b/system/vl.c
+@@ -2939,7 +2939,22 @@ void qemu_init(int argc, char **argv)
+             switch(popt->index) {
+             case QEMU_OPTION_cpu:
+                 /* hw initialization will check this */
+-                cpu_option = optarg;
++                if (cpu_option) {
++                    const char *old_cpu_option = cpu_option;
++                    size_t cpu_option_buf_len = strlen(old_cpu_option) + 1 + strlen(optarg) + 1;
++                    char *new_cpu_option = malloc(cpu_option_buf_len * sizeof(char));
++                    if (new_cpu_option != NULL) {
++                        strcpy(new_cpu_option, old_cpu_option);
++                        strcat(new_cpu_option, ",");
++                        strcat(new_cpu_option, optarg);
++                    }
++                    cpu_option = new_cpu_option;
++                    /* will throw a warning (but must have been created by malloc or strdup) */
++                    free(old_cpu_option);
++                }
++                else {
++                    cpu_option = strdup(optarg);
++                }
+                 break;
+             case QEMU_OPTION_hda:
+             case QEMU_OPTION_hdb:
+@@ -3833,6 +3848,9 @@ void qemu_init(int argc, char **argv)
+     current_machine->cpu_type = machine_default_cpu_type(current_machine);
+     if (cpu_option) {
+         current_machine->cpu_type = parse_cpu_option(cpu_option);
++        /** cpu_option created by malloc or strdup */
++        free((char*)cpu_option);
++        cpu_option = NULL;
+     }
+     /* NB: for machine none cpu_type could STILL be NULL here! */
+ 
 diff --git a/target/i386/cpu.c b/target/i386/cpu.c
-index 78308a82..0830afbf 100644
+index 78308a82..e7f52b80 100644
 --- a/target/i386/cpu.c
 +++ b/target/i386/cpu.c
-@@ -10019,7 +10019,7 @@ static const Property x86_cpu_properties[] = {
+@@ -44,6 +44,7 @@
+ #include "system/address-spaces.h"
+ #include "hw/boards.h"
+ #include "hw/i386/sgx-epc.h"
++#include "hw/acpi/cppc.h"
+ #endif
+ #include "system/qtest.h"
+ #include "tcg/tcg-cpu.h"
+@@ -1349,7 +1350,7 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
+         .type = CPUID_FEATURE_WORD,
+         .feat_names = {
+             NULL, NULL, NULL, NULL,
+-            NULL, NULL, NULL, NULL,
++            NULL, NULL, NULL, "pstate",
+             "invtsc", NULL, NULL, NULL,
+             NULL, NULL, NULL, NULL,
+             NULL, NULL, NULL, NULL,
+@@ -1386,7 +1387,7 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
+             "ibpb", NULL, "ibrs", "amd-stibp",
+             NULL, "stibp-always-on", NULL, NULL,
+             NULL, NULL, NULL, NULL,
+-            "amd-ssbd", "virt-ssbd", "amd-no-ssb", NULL,
++            "amd-ssbd", "virt-ssbd", "amd-no-ssb", "cppc",
+             "amd-psfd", NULL, NULL, NULL,
+         },
+         .cpuid = { .eax = 0x80000008, .reg = R_EBX, },
+@@ -7539,6 +7540,22 @@ uint64_t x86_cpu_get_supported_feature_word(X86CPU *cpu, FeatureWord w)
+             unavail = ~0;
+         }
+         break;
++    case FEAT_8000_0007_EDX:
++        /*
++         * For CPPC guest driver functionality: allow pstate flag
++         * TODO: Only if CPPC device is present
++         */
++        r |= (1 << 7);
++        break;
++    case FEAT_8000_0008_EBX:
++        /*
++         * Processor Programming Reference (PPR) for AMD
++         * Family 19h Model 51h, Revision A1 Processors.
++         * X86_FEATURE_CPPC indicates presence of MSR registers
++         * for ACPI _CPC.
++         */
++        r |= (1 << 27);
++        break;
+ 
+     case FEAT_7_0_EBX:
+ #ifndef CONFIG_USER_ONLY
+@@ -9977,6 +9994,8 @@ static const Property x86_cpu_properties[] = {
+     DEFINE_PROP_BIT64("hv-syndbg", X86CPU, hyperv_features,
+                       HYPERV_FEAT_SYNDBG, 0),
+ #endif
++    DEFINE_PROP_BIT64("hv-cppc-stub", X86CPU, hyperv_features,
++                      HYPERV_FEAT_CPPC_STUB, 0),
+     DEFINE_PROP_BOOL("hv-passthrough", X86CPU, hyperv_passthrough, false),
+     DEFINE_PROP_BOOL("hv-enforce-cpuid", X86CPU, hyperv_enforce_cpuid, false),
+ 
+@@ -10019,7 +10038,7 @@ static const Property x86_cpu_properties[] = {
      DEFINE_PROP_BOOL("lmce", X86CPU, enable_lmce, false),
      DEFINE_PROP_BOOL("l3-cache", X86CPU, enable_l3_cache, true),
      DEFINE_PROP_BOOL("kvm-pv-enforce-cpuid", X86CPU, kvm_pv_enforce_cpuid,
@@ -1550,6 +1998,39 @@ index 78308a82..0830afbf 100644
      DEFINE_PROP_BOOL("vmware-cpuid-freq", X86CPU, vmware_cpuid_freq, true),
      DEFINE_PROP_BOOL("tcg-cpuid", X86CPU, expose_tcg, true),
      DEFINE_PROP_BOOL("x-migrate-smi-count", X86CPU, migrate_smi_count,
+diff --git a/target/i386/cpu.h b/target/i386/cpu.h
+index ee3ed5ae..7c13b90c 100644
+--- a/target/i386/cpu.h
++++ b/target/i386/cpu.h
+@@ -1388,6 +1388,7 @@ uint64_t x86_cpu_get_supported_feature_word(X86CPU *cpu, FeatureWord w);
+ #define HYPERV_FEAT_XMM_INPUT           18
+ #define HYPERV_FEAT_TLBFLUSH_EXT        19
+ #define HYPERV_FEAT_TLBFLUSH_DIRECT     20
++#define HYPERV_FEAT_CPPC_STUB           21
+ 
+ #ifndef HYPERV_SPINLOCK_NEVER_NOTIFY
+ #define HYPERV_SPINLOCK_NEVER_NOTIFY             0xFFFFFFFF
+diff --git a/target/i386/kvm/hyperv-proto.h b/target/i386/kvm/hyperv-proto.h
+index a9f056f2..ce815c43 100644
+--- a/target/i386/kvm/hyperv-proto.h
++++ b/target/i386/kvm/hyperv-proto.h
+@@ -46,6 +46,8 @@
+  */
+ #define HV_POST_MESSAGES             (1u << 4)
+ #define HV_SIGNAL_EVENTS             (1u << 5)
++#define HV_CPU_MANAGEMENT            (1u << 12)
++#define HV_ISOLATION                 (1u << 22)
+ 
+ /*
+  * HV_CPUID_FEATURES.EDX bits
+@@ -79,6 +81,7 @@
+ #define HV_DEPRECATING_AEOI_RECOMMENDED     (1u << 9)
+ #define HV_CLUSTER_IPI_RECOMMENDED          (1u << 10)
+ #define HV_EX_PROCESSOR_MASKS_RECOMMENDED   (1u << 11)
++#define HV_NESTED_HV_PARTITION              (1u << 12)
+ #define HV_ENLIGHTENED_VMCS_RECOMMENDED     (1u << 14)
+ #define HV_NO_NONARCH_CORESHARING           (1u << 18)
+ 
 diff --git a/target/i386/kvm/kvm-cpu.c b/target/i386/kvm/kvm-cpu.c
 index 9c25b558..af64a32e 100644
 --- a/target/i386/kvm/kvm-cpu.c
@@ -1573,3 +2054,322 @@ index 9c25b558..af64a32e 100644
      { "x2apic", "on" },
      { "kvm-msi-ext-dest-id", "off" },
      { "acpi", "off" },
+diff --git a/target/i386/kvm/kvm.c b/target/i386/kvm/kvm.c
+index 60c79811..b16ad65d 100644
+--- a/target/i386/kvm/kvm.c
++++ b/target/i386/kvm/kvm.c
+@@ -101,17 +101,7 @@
+  * 255 kvm_msr_entry structs */
+ #define MSR_BUF_SIZE 4096
+ 
+-typedef bool QEMURDMSRHandler(X86CPU *cpu, uint32_t msr, uint64_t *val);
+-typedef bool QEMUWRMSRHandler(X86CPU *cpu, uint32_t msr, uint64_t val);
+-typedef struct {
+-    uint32_t msr;
+-    QEMURDMSRHandler *rdmsr;
+-    QEMUWRMSRHandler *wrmsr;
+-} KVMMSRHandlers;
+-
+ static void kvm_init_msrs(X86CPU *cpu);
+-static int kvm_filter_msr(KVMState *s, uint32_t msr, QEMURDMSRHandler *rdmsr,
+-                          QEMUWRMSRHandler *wrmsr);
+ 
+ const KVMCapabilityInfo kvm_arch_required_capabilities[] = {
+     KVM_CAP_INFO(SET_TSS_ADDR),
+@@ -187,6 +177,7 @@ static KVMMSRHandlers msr_handlers[KVM_MSR_FILTER_MAX_RANGES];
+ #define BUS_LOCK_SLICE_TIME 1000000000ULL /* ns */
+ static RateLimit bus_lock_ratelimit_ctrl;
+ static int kvm_get_one_msr(X86CPU *cpu, int index, uint64_t *value);
++static int kvm_put_one_msr(X86CPU *cpu, int index, uint64_t value);
+ 
+ static const char *vm_type_name[] = {
+     [KVM_X86_DEFAULT_VM] = "default",
+@@ -1042,6 +1033,13 @@ static struct {
+              .bits = HV_ACCESS_REENLIGHTENMENTS_CONTROL}
+         }
+     },
++    [HYPERV_FEAT_CPPC_STUB] = {
++        .desc = "CPU management for stub CPPC",
++        .flags = {
++            {.func = HV_CPUID_FEATURES, .reg = R_EBX,
++             .bits = HV_CPU_MANAGEMENT | HV_ISOLATION},
++        }
++    },
+     [HYPERV_FEAT_TLBFLUSH] = {
+         .desc = "paravirtualized TLB flush (hv-tlbflush)",
+         .flags = {
+@@ -1514,9 +1512,11 @@ bool kvm_hyperv_expand_features(X86CPU *cpu, Error **errp)
+ 
+             /* Check if the feature is supported by KVM */
+             if (!hyperv_feature_supported(cs, feat)) {
++                if (feat != HYPERV_FEAT_CPPC_STUB) { //TODO HACK
+                 error_setg(errp, "Hyper-V %s is not supported by kernel",
+                            kvm_hyperv_properties[feat].desc);
+                 return false;
++                }
+             }
+ 
+             /* Check dependencies */
+@@ -3139,15 +3139,12 @@ static int kvm_vm_set_tss_addr(KVMState *s, uint64_t tss_base)
+     return kvm_vm_ioctl(s, KVM_SET_TSS_ADDR, tss_base);
+ }
+ 
+-static int kvm_vm_enable_disable_exits(KVMState *s)
++int kvm_vm_enable_disable_exits(KVMState *s, int exits)
+ {
+     int disable_exits = kvm_check_extension(s, KVM_CAP_X86_DISABLE_EXITS);
+ 
+     if (disable_exits) {
+-        disable_exits &= (KVM_X86_DISABLE_EXITS_MWAIT |
+-                          KVM_X86_DISABLE_EXITS_HLT |
+-                          KVM_X86_DISABLE_EXITS_PAUSE |
+-                          KVM_X86_DISABLE_EXITS_CSTATE);
++        disable_exits &= exits;
+     }
+ 
+     return kvm_vm_enable_cap(s, KVM_CAP_X86_DISABLE_EXITS, 0,
+@@ -3195,14 +3192,16 @@ static int kvm_vm_enable_userspace_msr(KVMState *s)
+     int ret;
+ 
+     ret = kvm_vm_enable_cap(s, KVM_CAP_X86_USER_SPACE_MSR, 0,
+-                            KVM_MSR_EXIT_REASON_FILTER);
++                            KVM_MSR_EXIT_REASON_FILTER
++                            | KVM_MSR_EXIT_REASON_INVAL
++                            | KVM_MSR_EXIT_REASON_UNKNOWN);
+     if (ret < 0) {
+         error_report("Could not enable user space MSRs: %s",
+                      strerror(-ret));
+         exit(1);
+     }
+ 
+-    ret = kvm_filter_msr(s, MSR_CORE_THREAD_COUNT,
++    ret = kvm_filter_msr(s, MSR_CORE_THREAD_COUNT, 1,
+                          kvm_rdmsr_core_thread_count, NULL);
+     if (ret < 0) {
+         error_report("Could not install MSR_CORE_THREAD_COUNT handler: %s",
+@@ -3218,7 +3217,7 @@ static int kvm_vm_enable_energy_msrs(KVMState *s)
+     int ret;
+ 
+     if (s->msr_energy.enable == true) {
+-        ret = kvm_filter_msr(s, MSR_RAPL_POWER_UNIT,
++        ret = kvm_filter_msr(s, MSR_RAPL_POWER_UNIT, 1,
+                              kvm_rdmsr_rapl_power_unit, NULL);
+         if (ret < 0) {
+             error_report("Could not install MSR_RAPL_POWER_UNIT handler: %s",
+@@ -3226,7 +3225,7 @@ static int kvm_vm_enable_energy_msrs(KVMState *s)
+             return ret;
+         }
+ 
+-        ret = kvm_filter_msr(s, MSR_PKG_POWER_LIMIT,
++        ret = kvm_filter_msr(s, MSR_PKG_POWER_LIMIT, 1,
+                              kvm_rdmsr_pkg_power_limit, NULL);
+         if (ret < 0) {
+             error_report("Could not install MSR_PKG_POWER_LIMIT handler: %s",
+@@ -3234,14 +3233,14 @@ static int kvm_vm_enable_energy_msrs(KVMState *s)
+             return ret;
+         }
+ 
+-        ret = kvm_filter_msr(s, MSR_PKG_POWER_INFO,
++        ret = kvm_filter_msr(s, MSR_PKG_POWER_INFO, 1,
+                              kvm_rdmsr_pkg_power_info, NULL);
+         if (ret < 0) {
+             error_report("Could not install MSR_PKG_POWER_INFO handler: %s",
+                          strerror(-ret));
+             return ret;
+         }
+-        ret = kvm_filter_msr(s, MSR_PKG_ENERGY_STATUS,
++        ret = kvm_filter_msr(s, MSR_PKG_ENERGY_STATUS, 1,
+                              kvm_rdmsr_pkg_energy_status, NULL);
+         if (ret < 0) {
+             error_report("Could not install MSR_PKG_ENERGY_STATUS handler: %s",
+@@ -3341,7 +3340,11 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
+     }
+ 
+     if (enable_cpu_pm) {
+-        ret = kvm_vm_enable_disable_exits(s);
++        ret = kvm_vm_enable_disable_exits(s,
++                                          KVM_X86_DISABLE_EXITS_MWAIT |
++                                          KVM_X86_DISABLE_EXITS_HLT |
++                                          KVM_X86_DISABLE_EXITS_PAUSE |
++                                          KVM_X86_DISABLE_EXITS_CSTATE);
+         if (ret < 0) {
+             error_report("kvm: guest stopping CPU not supported: %s",
+                          strerror(-ret));
+@@ -5899,12 +5902,12 @@ static int kvm_install_msr_filters(KVMState *s)
+     QEMU_BUILD_BUG_ON(ARRAY_SIZE(msr_handlers) != ARRAY_SIZE(filter.ranges));
+     for (i = 0; i < ARRAY_SIZE(msr_handlers); i++) {
+         KVMMSRHandlers *handler = &msr_handlers[i];
+-        if (handler->msr) {
++        if (handler->msr && handler->filters) {
+             struct kvm_msr_filter_range *range = &filter.ranges[j++];
+ 
+             *range = (struct kvm_msr_filter_range) {
+                 .flags = 0,
+-                .nmsrs = 1,
++                .nmsrs = handler->count,
+                 .base = handler->msr,
+                 .bitmap = (__u8 *)&zero,
+             };
+@@ -5922,15 +5925,19 @@ static int kvm_install_msr_filters(KVMState *s)
+     return kvm_vm_ioctl(s, KVM_X86_SET_MSR_FILTER, &filter);
+ }
+ 
+-static int kvm_filter_msr(KVMState *s, uint32_t msr, QEMURDMSRHandler *rdmsr,
+-                          QEMUWRMSRHandler *wrmsr)
++static int kvm_add_msr(KVMState *s, uint32_t msr, uint32_t count,
++                        QEMURDMSRHandler *rdmsr, QEMUWRMSRHandler *wrmsr,
++                        bool provides, bool filters)
+ {
+     int i, ret;
+ 
+     for (i = 0; i < ARRAY_SIZE(msr_handlers); i++) {
+         if (!msr_handlers[i].msr) {
+             msr_handlers[i] = (KVMMSRHandlers) {
++                .provides = provides ? 1 : 0,
++                .filters = filters ? 1 : 0,
+                 .msr = msr,
++                .count = count,
+                 .rdmsr = rdmsr,
+                 .wrmsr = wrmsr,
+             };
+@@ -5947,6 +5954,17 @@ static int kvm_filter_msr(KVMState *s, uint32_t msr, QEMURDMSRHandler *rdmsr,
+ 
+     return -EINVAL;
+ }
++int kvm_provide_msr(KVMState *s, uint32_t msr, uint32_t count,
++                     QEMURDMSRHandler *rdmsr, QEMUWRMSRHandler *wrmsr,
++                     bool intercept)
++{
++    return kvm_add_msr(s, msr, count, rdmsr, wrmsr, true, intercept);
++}
++int kvm_filter_msr(KVMState *s, uint32_t msr, uint32_t count,
++                     QEMURDMSRHandler *rdmsr, QEMUWRMSRHandler *wrmsr)
++{
++    return kvm_add_msr(s, msr, count, rdmsr, wrmsr, false, true);
++}
+ 
+ static int kvm_handle_rdmsr(X86CPU *cpu, struct kvm_run *run)
+ {
+@@ -5955,9 +5973,14 @@ static int kvm_handle_rdmsr(X86CPU *cpu, struct kvm_run *run)
+ 
+     for (i = 0; i < ARRAY_SIZE(msr_handlers); i++) {
+         KVMMSRHandlers *handler = &msr_handlers[i];
+-        if (run->msr.index == handler->msr) {
++        if (run->msr.index >= handler->msr
++            && run->msr.index - handler->msr < handler->count
++            && (!(run->msr.reason != KVM_MSR_EXIT_REASON_FILTER)
++                || (handler->provides == 1))
++            && (!(run->msr.reason == KVM_MSR_EXIT_REASON_FILTER)
++                || (handler->filters == 1))) {
+             if (handler->rdmsr) {
+-                r = handler->rdmsr(cpu, handler->msr,
++                r = handler->rdmsr(cpu, run->msr.index,
+                                    (uint64_t *)&run->msr.data);
+                 run->msr.error = r ? 0 : 1;
+                 return 0;
+@@ -5965,7 +5988,8 @@ static int kvm_handle_rdmsr(X86CPU *cpu, struct kvm_run *run)
+         }
+     }
+ 
+-    g_assert_not_reached();
++    run->msr.error = 1;
++    return 0;
+ }
+ 
+ static int kvm_handle_wrmsr(X86CPU *cpu, struct kvm_run *run)
+@@ -5975,16 +5999,22 @@ static int kvm_handle_wrmsr(X86CPU *cpu, struct kvm_run *run)
+ 
+     for (i = 0; i < ARRAY_SIZE(msr_handlers); i++) {
+         KVMMSRHandlers *handler = &msr_handlers[i];
+-        if (run->msr.index == handler->msr) {
++        if (run->msr.index >= handler->msr
++            && run->msr.index - handler->msr < handler->count
++            && (!(run->msr.reason != KVM_MSR_EXIT_REASON_FILTER)
++                || (handler->provides == 1))
++            && (!(run->msr.reason == KVM_MSR_EXIT_REASON_FILTER)
++                || (handler->filters == 1))) {
+             if (handler->wrmsr) {
+-                r = handler->wrmsr(cpu, handler->msr, run->msr.data);
++                r = handler->wrmsr(cpu, run->msr.index, run->msr.data);
+                 run->msr.error = r ? 0 : 1;
+                 return 0;
+             }
+         }
+     }
+ 
+-    g_assert_not_reached();
++    run->msr.error = 1;
++    return 0;
+ }
+ 
+ static bool has_sgx_provisioning;
+@@ -6169,13 +6199,13 @@ int kvm_arch_handle_exit(CPUState *cs, struct kvm_run *run)
+         }
+         break;
+     case KVM_EXIT_X86_RDMSR:
+-        /* We only enable MSR filtering, any other exit is bogus */
+-        assert(run->msr.reason == KVM_MSR_EXIT_REASON_FILTER);
++        ///* We only enable MSR filtering, any other exit is bogus */
++        //assert(run->msr.reason == KVM_MSR_EXIT_REASON_FILTER);
+         ret = kvm_handle_rdmsr(cpu, run);
+         break;
+     case KVM_EXIT_X86_WRMSR:
+-        /* We only enable MSR filtering, any other exit is bogus */
+-        assert(run->msr.reason == KVM_MSR_EXIT_REASON_FILTER);
++        ///* We only enable MSR filtering, any other exit is bogus */
++        //assert(run->msr.reason == KVM_MSR_EXIT_REASON_FILTER);
+         ret = kvm_handle_wrmsr(cpu, run);
+         break;
+ #ifdef CONFIG_XEN_EMU
+diff --git a/target/i386/kvm/kvm_i386.h b/target/i386/kvm/kvm_i386.h
+index 2b653442..b3014edb 100644
+--- a/target/i386/kvm/kvm_i386.h
++++ b/target/i386/kvm/kvm_i386.h
+@@ -72,6 +72,47 @@ struct kvm_cpuid_entry2 *cpuid_find_entry(struct kvm_cpuid2 *cpuid,
+ uint32_t cpuid_entry_get_reg(struct kvm_cpuid_entry2 *entry, int reg);
+ uint32_t kvm_x86_build_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
+                              uint32_t cpuid_i);
++
++/* MSR Read handler.
++ * On success, writes a value into *val and returns true.
++ * On failure, returns false, possibly leading to #GP(0) */
++typedef bool QEMURDMSRHandler(X86CPU *cpu, uint32_t msr, uint64_t *val);
++/* MSR Write handler.
++ * On failure, returns false, possibly leading to #GP(0) */
++typedef bool QEMUWRMSRHandler(X86CPU *cpu, uint32_t msr, uint64_t val);
++typedef struct kvm_msr_handlers {
++    uint8_t provides : 1;
++    uint8_t filters : 1;
++    uint32_t msr;
++    uint32_t count;
++    QEMURDMSRHandler *rdmsr;
++    QEMUWRMSRHandler *wrmsr;
++} KVMMSRHandlers;
++
++/*
++ * Call to provide an MSR that KVM does not natively handle.
++ *  - msr: First MSR ID
++ *  - count: Number of consecutive MSRs to provide
++ *  - rdmsr: Read handler
++ *  - wrmsr: Write handler
++ *  - intercept: If set, will also install a KVM MSR filter,
++ *               in order to override the MSR value from KVM.
++ */
++int kvm_provide_msr(KVMState *s, uint32_t msr, uint32_t count,
++                     QEMURDMSRHandler *rdmsr, QEMUWRMSRHandler *wrmsr,
++                     bool intercept);
++/*
++ * Call to provide an MSR filter that *will* override matching MSRs.
++ *  - msr: First MSR ID
++ *  - count: Number of consecutive MSRs to filter
++ *  - rdmsr: Read handler
++ *  - wrmsr: Write handler
++ */
++int kvm_filter_msr(KVMState *s, uint32_t msr, uint32_t count,
++                    QEMURDMSRHandler *rdmsr, QEMUWRMSRHandler *wrmsr);
++
++int kvm_vm_enable_disable_exits(KVMState *s, int exits);
++
+ #endif /* CONFIG_KVM */
+ 
+ void kvm_smm_cpu_address_space_init(X86CPU *cpu);
