@@ -1,3 +1,12 @@
+diff --git a/.zed/settings.json b/.zed/settings.json
+new file mode 100644
+index 00000000..2f5c674c
+--- /dev/null
++++ b/.zed/settings.json
+@@ -0,0 +1,3 @@
++{
++  "format_on_save": "off"
++}
 diff --git a/hw/acpi/Kconfig b/hw/acpi/Kconfig
 index daabbe6c..acf64985 100644
 --- a/hw/acpi/Kconfig
@@ -21,6 +30,22 @@ index daabbe6c..acf64985 100644
  config ACPI_MEMORY_HOTPLUG
      bool
      select MEM_DEVICE
+diff --git a/hw/acpi/acpi-cppc-stub.c b/hw/acpi/acpi-cppc-stub.c
+new file mode 100644
+index 00000000..33f3a026
+--- /dev/null
++++ b/hw/acpi/acpi-cppc-stub.c
+@@ -0,0 +1,10 @@
++#include "qemu/osdep.h"
++#include "hw/acpi/cppc.h"
++
++void cppc_aml(Aml *processor, int uid, CPPCDevice *device)
++{}
++
++CPPCDevice *cppc_get_device(void)
++{
++    return NULL;
++}
 diff --git a/hw/acpi/aml-build.c b/hw/acpi/aml-build.c
 index 2d5826a8..88530f48 100644
 --- a/hw/acpi/aml-build.c
@@ -98,6 +123,1136 @@ index 2d5826a8..88530f48 100644
  
      /* TODO: extra fields need to be added to support revisions above rev6 */
      assert(f->rev == 6);
+diff --git a/hw/acpi/cppc.c b/hw/acpi/cppc.c
+new file mode 100644
+index 00000000..a410a0d0
+--- /dev/null
++++ b/hw/acpi/cppc.c
+@@ -0,0 +1,1124 @@
++#include "qemu/osdep.h"
++#include "qemu/timer.h"
++#include "migration/vmstate.h"
++#include "hw/acpi/cpu.h"
++#include "hw/acpi/cppc.h"
++#include "qemu/error-report.h"
++#include "qapi/error.h"
++#include "qapi/qapi-events-acpi.h"
++#include "trace.h"
++#include "system/numa.h"
++#include "system/address-spaces.h"
++#include "hw/qdev-properties-system.h"
++#include "hw/core/cpu.h"
++#if defined(TARGET_I386) || defined(TARGET_X86_64)
++#include "system/kvm.h"
++#include "kvm/kvm_i386.h"
++#include <linux/kvm.h>
++
++#define CPPC_DEFAULT_ADDRSPACE 2 /* AMD MSR */
++#else
++#define CPPC_DEFAULT_ADDRSPACE 1 /* System IO */
++#endif
++
++/* Define MSRs outside defined(TARGET_...) to simplify cppc_aml */
++
++/* AMD Collaborative Processor Performance Control MSRs (from Linux) */
++#define MSR_AMD_CPPC_CAP1       0xc00102b0
++#define MSR_AMD_CPPC_ENABLE     0xc00102b1
++#define MSR_AMD_CPPC_CAP2       0xc00102b2
++#define MSR_AMD_CPPC_REQ        0xc00102b3
++#define MSR_AMD_CPPC_STATUS     0xc00102b4
++
++#define _MSR_AMD_CPPC_FIRST     MSR_AMD_CPPC_CAP1
++#define _MSR_AMD_CPPC_COUNT     ((MSR_AMD_CPPC_STATUS - MSR_AMD_CPPC_CAP1) + 1)
++
++#define MSR_AMD_PERF_LIMIT      0xc0010061
++#define MSR_AMD_PERF_CTL        0xc0010062
++#define MSR_AMD_PERF_STATUS     0xc0010063
++
++#define _MSR_AMD_PERF_FIRST     MSR_AMD_PERF_LIMIT
++#define _MSR_AMD_PERF_COUNT     ((MSR_AMD_PERF_STATUS - MSR_AMD_PERF_LIMIT) + 1)
++
++#define MSR_IA32_MPERF          0x000000e7
++#define MSR_IA32_APERF          0x000000e8
++
++#define MSR_MPERF_RO            0xc00000e7
++#define MSR_APERF_RO            0xc00000e8
++
++#define MSR_HV_REGISTER_CPU_MANAGEMENT_VERSION 0x00090007
++
++
++/*
++ * This device provides _CPC objects to each ACPI processor device.
++ * Can be instantiated through command line like:
++ *
++ * -device acpi-cppc,len-processors=1,processors[1]=<vcpu>:<highest>:<nominal>:<lowest_nonlinear>:<lowest>
++ *
++ * Where the processor array corresponds to the vCPUs.
++ * No _CPC object will be provided for vCPUs missing from this array.
++ * Ideally, with pinned vCPUs, the performance values should be chosen to match the corresponding host CPU.
++ *
++ * Important: The amdppm Windows driver appears to (silently) disregard CPPC if the values are not equal for SMTs
++ *  -> In QEMU x86 targets, neighboring CPU apic ids/CPU indices are reported as SMTs of the same core
++ *     (-> include/hw/i386/topology.h).
++ *     Thus, if the topology is set to 2 threads per core, the CPPC values must match up for every vcpu pair 0&1, 2&3, ...
++ *
++ * Optional parameters:
++ *  addrspace=(0|1|2)  - default 2 on x86, 1 otherwise
++ *    Provide registers in the System Memory (0), System IO (1) or CPU MSR (2, AMD x86) address space.
++ *    System IO resides in the lower 64K. The amdppm Windows driver only accepts System IO, PCC, Fixed Function (=MSR).
++ *     -> PCC mechanisms would have to be implemented from scratch, but *should* be doable within qemu.
++ *  addr_shared=(on|off) - default off  [deprecated]
++ *    Use the same register address across all vCPUs,
++ *    and differentiate by the thread accessing the register instead of the address.
++ *    This is required for Windows with System IO, but even on Windows may provide incorrect results.
++ *     (the Windows driver appears to be buggy for anything but CPU MSR)
++ *  address=0x<...>  - default 0x80000000000 for System Memory, 0x0100 for System IO
++ *    Base address where MMIO registers will be mapped. The ACPI tables will be set to the correct address.
++ *    Note that the address must be chosen with care, and should not conflict with any other memory region.
++ *      -> System Memory: In a Linux guest, choose a region not listed by `cat /proc/iomem` (not even as Reserved).
++ *    This setting has no effect on CPU MSRs.
++ *  counter_scale=<n>  - default 1
++ *    Sets the proportional time scale for the performance counter.
++ *    1 means that the counter increases by its reference value (highest or nominal) once per second.
++*/
++
++#define TYPE_CPPCDEVICE "acpi-cppc"
++OBJECT_DECLARE_SIMPLE_TYPE(CPPCDevice, CPPCDEVICE)
++
++static Aml *cppc_reg_resource(hwaddr addr, uint8_t addr_space,
++                              uint8_t bit_width, uint8_t bit_offset,
++                              AmlAccessType access_size)
++{
++    //_CPC Allowed: PCC, System Memory, System IO, Functional Fixed Hardware
++    Aml *reg_resource = aml_resource_template();
++    Aml *reg = aml_generic_register(addr_space,
++                                    bit_width, bit_offset,
++                                    access_size, addr);
++    aml_append(reg_resource, reg);
++    return reg_resource;
++}
++
++//TODO: Fix processors device property (for command line configuration)
++
++//Implementation as MSR (AMD):
++ //CPUID Fn8000_0008_EBX[CPPC] to indicate MSR_AMD_CPPC_* support
++ //-> Will be set if present on host (imposed by QEMU via 'migratable' check)
++ //CPUID Fn0000_0006_ECX[EffFreq] to indicate MPERF, APERF MSR support
++ // -> Missing, KVM sets it to 0
++ //CPUID Fn8000_0007_ECX[HwState] to indicate MSR_AMD_PERF_* support
++ // -> Will be present if present on host (imposed by QEMU _and_ KVM)
++
++//TODO: Implement AMDI0101 device - use acpi_send_event to notify OS about resulting CPPC changes
++
++#define SYSTEMREG_CPPCMEM_PERCPU 9
++#define SYSTEMREG_PCTMEM_PERCPU 2
++#define SYSTEMREG_TOTAL_PERCPU (SYSTEMREG_CPPCMEM_PERCPU + SYSTEMREG_PCTMEM_PERCPU)
++#define SYSTEMIO_CPPCMEM_LEN_PERCPU 22
++#define SYSTEMIO_PCTMEM_LEN_PERCPU 2
++/* 4-byte align SystemIO */
++#define SYSTEMIO_TOTAL_LEN_PERCPU (((SYSTEMIO_CPPCMEM_LEN_PERCPU + SYSTEMIO_PCTMEM_LEN_PERCPU)+3)&~3)
++
++inline hwaddr cppc_len_per_cpu(CPPCDevice *cppc)
++{
++    switch (cppc->iomem_space)
++    {
++        case 0: default: return SYSTEMREG_TOTAL_PERCPU;
++        case 1: return SYSTEMIO_TOTAL_LEN_PERCPU;
++    }
++}
++inline uint8_t cppc_reg_offs_to_id(CPPCDevice *cppc, uint8_t offs)
++{
++    switch (cppc->iomem_space)
++    {
++        case 0: default: return offs;
++        case 1: switch (offs)
++        {
++            case 0:  return 0;
++            case 2:  return 1;
++            case 4:  return 2;
++            case 6:  return 3;
++            case 8:  return 4;
++            case 12: return 5;
++            case 16: return 6;
++            case 20: return 7;
++            case 21: return 8;
++            case 22: return 9; /*_PCT Control*/
++            case 23: return 10; /*_PCT Status*/
++        }
++    }
++    return 255;
++}
++inline uint8_t cppc_reg_id_to_offs(CPPCDevice *cppc, uint8_t id)
++{
++    switch (cppc->iomem_space)
++    {
++        case 0: default: return id;
++        case 1: switch (id)
++        {
++            case 0: return 0;
++            case 1: return 2;
++            case 2: return 4;
++            case 3: return 6;
++            case 4: return 8;
++            case 5: return 12;
++            case 6: return 16;
++            case 7: return 20;
++            case 8: return 21;
++            case 9: return 22; /*_PCT Control*/
++            case 10: return 23; /*_PCT Status*/
++        }
++    }
++    return 255;
++}
++
++void cppc_aml(Aml *processor, int uid, CPPCDevice *cppc)
++{
++    //struct Aml *method = aml_method("_CPC", 0, AML_NOTSERIALIZED);
++    struct Aml *pkg = aml_package(23);
++    Aml *pkg2;
++    Aml *method;
++
++    Aml *empty_reg_resource = cppc_reg_resource(0, AML_AS_SYSTEM_MEMORY, 0, 0, 0);
++
++    hwaddr baseaddr; int baseuid; uint8_t baseuid_domainsize;
++
++    AmlAddressSpace aml_space;
++    uint8_t perfctr_width = 64;
++    AmlAccessType perfctr_acc_type = AML_QWORD_ACC;
++    switch (cppc->iomem_space)
++    {
++        case 0:
++            aml_space = AML_AS_SYSTEM_MEMORY;
++            break;
++        case 1:
++            aml_space = AML_AS_SYSTEM_IO;
++            /* System IO: QWORD access is not allowed */
++            perfctr_width = 32;
++            perfctr_acc_type = AML_DWORD_ACC;
++            break;
++        case 2:
++            aml_space = AML_AS_FFH;
++            break;
++        default: return;
++    }
++
++    if (uid < 0 || uid >= cppc->acpi_processor_count || cppc->acpi_processors[uid].main_vcpu >= cppc->acpi_processor_count)
++    {
++        return;
++    }
++    baseuid = cppc->acpi_processors[uid].main_vcpu;
++    if (cppc->iomem_shared_address) {
++        baseaddr = cppc->iomem_offset;
++    } else {
++        baseaddr = cppc->iomem_offset + baseuid * cppc_len_per_cpu(cppc);
++    }
++    baseuid_domainsize = cppc->acpi_processors[baseuid].vcpu_domain_size;
++
++    /* Package entry count (same value as in the aml_package parameter) */
++    aml_append(pkg, aml_int(23));
++    /* Revision */
++    aml_append(pkg, aml_int(3));
++
++    /* Highest Performance */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_CAP1
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 0)),
++                                      aml_space,
++                                      8,
++                                      (cppc->iomem_space==2)?24:0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC));
++    /* Nominal Performance */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_CAP1
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 1)),
++                                      aml_space,
++                                      8,
++                                      (cppc->iomem_space==2)?16:0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC));
++    /* Lowest Nonlinear Performance */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_CAP1
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 2)),
++                                      aml_space,
++                                      8,
++                                      (cppc->iomem_space==2)?8:0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC));
++    /* Lowest Performance */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_CAP1
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 3)),
++                                      aml_space,
++                                      8,
++                                      (cppc->iomem_space==2)?0:0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC));
++    /* Guaranteed Performance Register */
++    aml_append(pkg, empty_reg_resource);
++    /* Desired Performance Register */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_REQ
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 4)),
++                                      aml_space,
++                                      8,
++                                      (cppc->iomem_space==2)?16:0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC));
++    /* Minimum Performance Register */
++    aml_append(pkg, empty_reg_resource); //MSR_AMD_CPPC_REQ (8-wide, offs 8, access size DWORD)
++    /* Maximum Performance Register */
++    aml_append(pkg, empty_reg_resource); //MSR_AMD_CPPC_REQ (8-wide, offs 0, access size DWORD)
++    /* Performance Reduction Tolerance Register */
++    aml_append(pkg, empty_reg_resource);
++    /* Time Window Register */
++    aml_append(pkg, empty_reg_resource);
++    /* Counter Wraparound Time */
++    aml_append(pkg, empty_reg_resource);
++    /* Reference Performance Counter Register */
++    //aml_append(pkg, empty_reg_resource);
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_IA32_MPERF
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 5)),
++                                      aml_space, perfctr_width, 0, perfctr_acc_type)); //MSR 0x000000E7 (64-wide, offs 0x00, access size QWORD)
++    /* Delivered Performance Counter Register */
++    //aml_append(pkg, empty_reg_resource);
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_IA32_APERF
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 6)),
++                                      aml_space, perfctr_width, 0, perfctr_acc_type)); //MSR 0x000000E8 (64-wide, offs 0x00, access size QWORD)
++    /* Performance Limited Register */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_STATUS
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 7)),
++                                      aml_space,
++                                      (cppc->iomem_space==2)?2:8, 0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC)); //MSR 0xC00102B4 (1-wide, offs 0x00, access size DWORD)
++    /* CPPC EnableRegister */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_CPPC_ENABLE
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 8)),
++                                      aml_space,
++                                      (cppc->iomem_space==2)?1:8, 0,
++                                      (cppc->iomem_space==2)?AML_QWORD_ACC:AML_BYTE_ACC)); //MSR 0xC00102B1 (1-wide, offs 0x00, access size DWORD)
++    /* Autonomous Selection Enable */
++    aml_append(pkg, aml_int(1));
++    /* AutonomousActivityWindowRegister */
++    aml_append(pkg, empty_reg_resource);
++    /* EnergyPerformancePreferenceRegister */
++    aml_append(pkg, empty_reg_resource);
++    /* Reference Performance (undefined -> Ref. counter with Nominal Performance) */
++    aml_append(pkg, empty_reg_resource);
++    /* Lowest Frequency */
++    aml_append(pkg, empty_reg_resource);
++    /* Nominal Frequency */
++    aml_append(pkg, empty_reg_resource);
++
++    aml_append(processor, aml_name_decl("_CPC", pkg));
++
++    //aml_append(method, aml_return(pkg));
++    //aml_append(processor, method);
++
++
++    //Also add stub packages for some Power State objects, to make operating systems happy
++    // (-> Linux rejects CPPC if _PSD is missing,
++    //     Windows expects all _CPC cores to have equal performance values,
++    //     as it assigns all cores to the same perf domain without valid _PSD)
++    /* _PSD */
++    pkg = aml_package(1);
++    /* PStateDependency [0] */
++    pkg2 = aml_package(5);
++    /* Package entry count (same value as in the aml_package parameter) */
++    aml_append(pkg2, aml_int(5));
++    /* Revision */
++    aml_append(pkg2, aml_int(0));
++    /* Domain (commonly, logical processor siblings would be in the same domain) */
++    aml_append(pkg2, aml_int(baseuid));
++    /* CoordType (0xFD = SW_ANY) */
++    aml_append(pkg2, aml_int(0xFD));
++    /* Domain size */
++    aml_append(pkg2, aml_int(baseuid_domainsize));
++
++    aml_append(pkg, pkg2);
++    aml_append(processor, aml_name_decl("_PSD", pkg));
++
++//    /* _CST */
++//    pkg = aml_package(1);
++//    /* Zero extra C-States */
++//    aml_append(pkg, aml_int(0));
++//
++//    aml_append(processor, aml_name_decl("_CST", pkg));
++//
++//    /* _CSD */
++//    pkg = aml_package(0);
++//    /* Zero extra C-States */
++//    aml_append(processor, aml_name_decl("_CSD", pkg));
++//
++//    /* _LPI */
++//    pkg = aml_package(3);
++//    /* Revision */
++//    aml_append(pkg, aml_int(0));
++//    /* LevelID (no processor node hierarchy) */
++//    aml_append(pkg, aml_int(0));
++//    /* No LPI packages */
++//    aml_append(pkg, aml_int(0));
++//    aml_append(processor, aml_name_decl("_LPI", pkg));
++
++
++    /* _PCT */
++    pkg = aml_package(2);
++    /* Control Register */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_PERF_CTL
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 9)),
++                                      aml_space,
++                                      (cppc->iomem_space==2)?64:8,
++                                      0,
++                                      (cppc->iomem_space==2)?AML_ANY_ACC:AML_BYTE_ACC)); //MSR 0xC0010062 (64-wide, offs 0x0, access size <invalid/not specified> (=QWORD?))
++    /* Status Register */
++    aml_append(pkg, cppc_reg_resource((cppc->iomem_space==2) ? MSR_AMD_PERF_STATUS
++                                        : (baseaddr + cppc_reg_id_to_offs(cppc, 10)),
++                                      aml_space,
++                                      (cppc->iomem_space==2)?64:8,
++                                      0,
++                                      (cppc->iomem_space==2)?AML_ANY_ACC:AML_BYTE_ACC)); //MSR 0xC0010063 (64-wide, offs 0x0, access size <invalid/not specified> (=QWORD?))
++
++    aml_append(processor, aml_name_decl("_PCT", pkg));
++
++    /* _PSS */
++    pkg = aml_package(2);
++    /* PState [0] */
++    pkg2 = aml_package(6);
++    /* Core Frequency - say 4000 MHz */
++    aml_append(pkg2, aml_int(4000));
++    /* Power - say 5000 mW */
++    aml_append(pkg2, aml_int(5000));
++    /* Latency - say 10 us */
++    aml_append(pkg2, aml_int(10));
++    /* Bus Master Latency - say 0 us */
++    aml_append(pkg2, aml_int(0));
++    /* Control */
++    aml_append(pkg2, aml_int(0));
++    /* Status */
++    aml_append(pkg2, aml_int(0));
++
++    aml_append(pkg, pkg2);
++    /* PState [1] */
++    pkg2 = aml_package(6);
++    /* Core Frequency - say 3000 MHz */
++    aml_append(pkg2, aml_int(3000));
++    /* Power - say 2500 mW */
++    aml_append(pkg2, aml_int(2500));
++    /* Latency - say 10 us */
++    aml_append(pkg2, aml_int(10));
++    /* Bus Master Latency - say 0 us */
++    aml_append(pkg2, aml_int(0));
++    /* Control */
++    aml_append(pkg2, aml_int(1));
++    /* Status */
++    aml_append(pkg2, aml_int(1));
++
++    aml_append(pkg, pkg2);
++    aml_append(processor, aml_name_decl("_PSS", pkg));
++
++    /* _PPC */
++    method = aml_method("_PPC", 0, AML_NOTSERIALIZED);
++    /* All performance states available (which are not real anyway) */
++    aml_append(pkg, aml_return(aml_int(0)));
++
++    aml_append(processor, method);
++
++}
++
++/* must be called within cppc_state_lock */
++static int64_t cppc_update_perfctrs(CPPCDevice *cppc)
++{
++    int64_t vclock_cur = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    if (cppc->clock_lastupdate == 0)
++    {
++        /* Initialize timer. */
++        cppc->clock_lastupdate = vclock_cur;
++        for (uint32_t i = 0; i < cppc->acpi_processor_count; ++i)
++        {
++            AcpiCPPCStatus *acpi_vcpu = &cppc->acpi_processors[i];
++            acpi_vcpu->reference_performance_counter = 0;
++            acpi_vcpu->delivered_performance_counter = 0;
++        }
++        return 0;
++    }
++    int64_t ret = vclock_cur - cppc->clock_lastupdate;
++    int64_t num_seconds = ret / NANOSECONDS_PER_SECOND;
++    ret = ret % NANOSECONDS_PER_SECOND;
++    if (num_seconds > 0)
++    {
++        cppc->clock_lastupdate = vclock_cur;
++        for (uint32_t i = 0; i < cppc->acpi_processor_count; ++i)
++        {
++            AcpiCPPCStatus *acpi_vcpu = &cppc->acpi_processors[i];
++            acpi_vcpu->reference_performance_counter += num_seconds * cppc->counter_scale * acpi_vcpu->nominal_performance;
++            /* Fake the performance counter for now.
++             * Host passthrough could be an option in the future,
++             *  but may lead to security concerns
++             *  (guest could infer additional info on host system). */
++            acpi_vcpu->delivered_performance_counter += num_seconds * cppc->counter_scale * acpi_vcpu->highest_performance;
++        }
++    }
++    return ret;
++}
++
++typedef struct CPPCIomemRegIDs {
++    uint32_t i_acpi_vcpu;
++    uint8_t regnum;
++} CPPCIomemRegIDs;
++
++/* must be called within cppc_state_lock */
++inline CPPCIomemRegIDs cppc_iomem_io_get_ids(CPPCDevice *cppc, hwaddr addr)
++{
++    CPPCIomemRegIDs ret;
++    uint32_t i_acpi_vcpu;
++    uint8_t subaddr;
++    if (cppc->iomem_shared_address) {
++        assert(current_cpu != NULL);
++        /* signed-to-unsigned (overflow check below)*/
++        i_acpi_vcpu = (uint32_t)(current_cpu ? current_cpu->cpu_index : 0);
++        assert(addr < cppc_len_per_cpu(cppc));
++        subaddr = (uint8_t)addr;
++    } else {
++        i_acpi_vcpu = (uint32_t)(addr / cppc_len_per_cpu(cppc));
++        subaddr = (uint8_t)(addr % cppc_len_per_cpu(cppc));
++    }
++    ret.i_acpi_vcpu = i_acpi_vcpu;
++    ret.regnum = cppc_reg_offs_to_id(cppc, subaddr);
++    return ret;
++}
++
++static uint64_t cppc_iomem_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    CPPCDevice *cppc = opaque;
++    qemu_mutex_lock(&cppc->cppc_state_lock);
++    CPPCIomemRegIDs regids = cppc_iomem_io_get_ids(cppc, addr);
++    uint64_t ret = 0;
++    AcpiCPPCStatus *acpi_vcpu;
++    if (regids.i_acpi_vcpu >= cppc->acpi_processor_count)
++    {
++        qemu_mutex_unlock(&cppc->cppc_state_lock);
++        return 0;
++    }
++    acpi_vcpu = &cppc->acpi_processors[regids.i_acpi_vcpu];
++    switch (regids.regnum)
++    {
++        case 0:
++            ret = acpi_vcpu->highest_performance;
++            break;
++        case 1:
++            ret = acpi_vcpu->nominal_performance;
++            //return (uint32_t)(acpi_vcpu->highest_performance)
++            //       | ((uint32_t)(acpi_vcpu->nominal_performance) << 16);
++            break;
++        case 2:
++            ret = acpi_vcpu->lowest_nonlinear_performance;
++            break;
++        case 3:
++            ret = acpi_vcpu->lowest_performance;
++            //ret = (uint32_t)(acpi_vcpu->lowest_nonlinear_performance)
++            //       | ((uint32_t)(acpi_vcpu->lowest_performance) << 16);
++            break;
++        case 4:
++            ret = acpi_vcpu->desired_performance;
++            break;
++        case 5:
++            {
++                int64_t diff = cppc_update_perfctrs(cppc);
++                ret = acpi_vcpu->reference_performance_counter
++                    + muldiv64(diff * cppc->counter_scale,
++                                acpi_vcpu->nominal_performance,
++                                NANOSECONDS_PER_SECOND);
++                break;
++            }
++        case 6:
++            {
++                int64_t diff = cppc_update_perfctrs(cppc);
++                ret = acpi_vcpu->delivered_performance_counter
++                    + muldiv64(diff * cppc->counter_scale,
++                                acpi_vcpu->highest_performance,
++                                NANOSECONDS_PER_SECOND);
++                break;
++            }
++        case 7:
++            ret = acpi_vcpu->performance_limited ? 1 : 0;
++            break;
++        case 8:
++            ret = acpi_vcpu->cppc_enable;
++            break;
++        case 10: /* _PCT Status */
++            ret = acpi_vcpu->pct_status;
++            break;
++    }
++    qemu_mutex_unlock(&cppc->cppc_state_lock);
++    return ret;
++}
++static void cppc_iomem_write(void *opaque, hwaddr addr, uint64_t data,
++                             unsigned int size)
++{
++    CPPCDevice *cppc = opaque;
++    qemu_mutex_lock(&cppc->cppc_state_lock);
++    CPPCIomemRegIDs regids = cppc_iomem_io_get_ids(cppc, addr);
++    AcpiCPPCStatus *acpi_vcpu;
++    if (regids.i_acpi_vcpu >= cppc->acpi_processor_count) {
++        qemu_mutex_unlock(&cppc->cppc_state_lock);
++        return;
++    }
++    acpi_vcpu = &cppc->acpi_processors[regids.i_acpi_vcpu];
++    switch (regids.regnum) {
++        case 4:
++            acpi_vcpu->desired_performance = (uint16_t)(data);
++            break;
++        case 7:
++            if (data == 0)
++                acpi_vcpu->performance_limited = false;
++            break;
++        case 8:
++            if (data != 0)
++                acpi_vcpu->cppc_enable = true;
++            /* Trigger the first perf counter update,
++             * so the OS does not get 0 values initially */
++            cppc_update_perfctrs(cppc);
++            break;
++        case 9: /* _PCT Control */
++            data = data & 0xFF;
++            if (data <= 1)
++                acpi_vcpu->pct_status = data;
++            break;
++    }
++    qemu_mutex_unlock(&cppc->cppc_state_lock);
++}
++
++static const MemoryRegionOps cppc_ops = {
++    .read = cppc_iomem_read,
++    .write = cppc_iomem_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++/* must be called within cppc_state_lock (or during device realization) */
++static void cppc_set_from_caps(CPPCDevice *cppc)
++{
++    for (uint32_t i = 0; i < cppc->num_config_caps; ++i) {
++        CPPCProcessorCaps *caps = &cppc->config_caps[i];
++        if (caps->vcpu < cppc->acpi_processor_count) {
++            AcpiCPPCStatus *acpi_vcpu = &cppc->acpi_processors[caps->vcpu];
++            if (caps->main_vcpu >= cppc->acpi_processor_count)
++                caps->main_vcpu = caps->vcpu;
++            acpi_vcpu->main_vcpu = caps->main_vcpu;
++            cppc->acpi_processors[caps->main_vcpu].vcpu_domain_size++;
++            acpi_vcpu->highest_performance = caps->highest_performance;
++            acpi_vcpu->nominal_performance = caps->nominal_performance;
++            acpi_vcpu->lowest_nonlinear_performance = caps->lowest_nonlinear_performance;
++            acpi_vcpu->lowest_performance = caps->lowest_performance;
++
++            acpi_vcpu->desired_performance = caps->nominal_performance;
++
++            acpi_vcpu->pct_status = 1;
++        }
++    }
++}
++
++#if defined(TARGET_I386) || defined(TARGET_X86_64)
++/* MSR 0x4000_0004 appears to be undocumented by Microsoft.
++ * Related with the HV_CPU_MANAGEMENT flag.
++ * Needs to be defined if CpuManagement is set.
++ * Constant 0 should in most cases lead to the same behavior as !CpuManagement.
++ * NOTE: May still affect some mitigation settings in the Windows kernel.
++ */
++static bool cppc_rdmsr_zero_handler(X86CPU *cpu, uint32_t msr, uint64_t *val)
++{
++    //if (msr == 0x40000004 || msr == MSR_HV_REGISTER_CPU_MANAGEMENT_VERSION) {
++        *val = 0;
++        return true;
++    //}
++    //return false;
++}
++static bool cppc_wrmsr_zero_handler(X86CPU *cpu, uint32_t msr, uint64_t val)
++{
++    return true;
++    //return msr == 0x40000004 || msr == MSR_HV_REGISTER_CPU_MANAGEMENT_VERSION;
++}
++static bool cppc_hv_msr_isset = false;
++static bool cppc_hv_msr_init(Error **errp)
++{
++    //Assuming there is only one thread 'realizing' devices
++    if (!cppc_hv_msr_isset)
++    {
++        int ret;
++        /* Assuming the HV_CPU_MANAGEMENT flag is set,
++        *  these MSRs will be required by the Windows kernel.
++        * Provide a dummy variant that makes Windows
++        *  behave *mostly* as without HV_CPU_MANAGEMENT. */
++        ret = kvm_provide_msr(kvm_state, 0x40000004, 1,
++                              &cppc_rdmsr_zero_handler,
++                              &cppc_wrmsr_zero_handler, true);
++        if (ret < 0) {
++            error_setg(errp, "CPPC: Could not register the 0x4000_0004 MSR (is KVM in use?): %s",
++                       strerror(-ret));
++            return false;
++        }
++        ret = kvm_provide_msr(kvm_state, MSR_HV_REGISTER_CPU_MANAGEMENT_VERSION, 1,
++                              &cppc_rdmsr_zero_handler,
++                              &cppc_wrmsr_zero_handler, true);
++        if (ret < 0) {
++            error_setg(errp, "CPPC: Could not register the CPU Management Version MSR (is KVM in use?): %s",
++                       strerror(-ret));
++            return false;
++        }
++        ret = kvm_provide_msr(kvm_state, 0x400000C1, 3,
++                              &cppc_rdmsr_zero_handler,
++                              &cppc_wrmsr_zero_handler, true);
++        if (ret < 0) {
++            error_setg(errp, "CPPC: Could not register the Power State Trigger MSR (is KVM in use?): %s",
++                       strerror(-ret));
++            return false;
++        }
++        ret = kvm_provide_msr(kvm_state, 0x400000D1, 3,
++                              &cppc_rdmsr_zero_handler,
++                              &cppc_wrmsr_zero_handler, true);
++        if (ret < 0) {
++            error_setg(errp, "CPPC: Could not register the Power State Config MSR (is KVM in use?): %s",
++                       strerror(-ret));
++            return false;
++        }
++        cppc_hv_msr_isset = true;
++    }
++    return true;
++}
++
++static bool cppc_rdmsr_main_handler(X86CPU *cpu, uint32_t msr, uint64_t *val)
++{
++    CPUState *cs = CPU(cpu);
++    CPPCDevice *cppc = cppc_get_device();
++    bool ret = false;
++    AcpiCPPCStatus *acpi_vcpu;
++
++    assert(cppc);
++    if (cppc == NULL)
++        return false;
++
++    qemu_mutex_lock(&cppc->cppc_state_lock);
++
++    if (cs->cpu_index >= cppc->acpi_processor_count)
++    {
++        qemu_mutex_unlock(&cppc->cppc_state_lock);
++        return false;
++    }
++    acpi_vcpu = &cppc->acpi_processors[cs->cpu_index];
++    assert(acpi_vcpu->main_vcpu < cppc->acpi_processor_count);
++    if (acpi_vcpu->main_vcpu >= cppc->acpi_processor_count)
++    {
++        qemu_mutex_unlock(&cppc->cppc_state_lock);
++        return false;
++    }
++    acpi_vcpu = &cppc->acpi_processors[acpi_vcpu->main_vcpu];
++
++    switch (msr)
++    {
++        case MSR_AMD_CPPC_CAP1: //0xc00102b0
++            *val = ((uint32_t)acpi_vcpu->highest_performance << 24)
++                   | ((uint32_t)acpi_vcpu->nominal_performance << 16)
++                   | ((uint32_t)acpi_vcpu->lowest_nonlinear_performance << 8)
++                   | ((uint32_t)acpi_vcpu->lowest_performance << 0);
++            if (!acpi_vcpu->cppc_enable) {
++                *val = 0;
++            }
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_ENABLE: //0xc00102b1
++            *val = acpi_vcpu->cppc_enable;
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_CAP2: //0xc00102b2
++            /* Unconstrained -> report highest performance */
++            *val = ((uint32_t)acpi_vcpu->highest_performance << 0x18);
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_REQ: //0xc00102b3
++            /* Report default values for non-supported registers */
++            *val = (0x7F << 24) /* Energy preference */
++                   | ((uint32_t)acpi_vcpu->desired_performance << 16)
++                   | ((uint32_t)acpi_vcpu->lowest_performance << 8)
++                   | ((uint32_t)acpi_vcpu->highest_performance << 0);
++            if (!acpi_vcpu->cppc_enable) {
++                *val = 0;
++            }
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_STATUS: //0xc00102b4
++            *val = acpi_vcpu->performance_limited ? (1<<1) : 0;
++            ret = true;
++            break;
++        case MSR_IA32_MPERF: //0x000000e7
++        case MSR_MPERF_RO: //0xc00000e7
++            {
++                int64_t diff = cppc_update_perfctrs(cppc);
++                *val = acpi_vcpu->reference_performance_counter
++                    + muldiv64(diff * cppc->counter_scale,
++                                acpi_vcpu->nominal_performance,
++                                NANOSECONDS_PER_SECOND);
++            }
++            ret = true;
++            break;
++        case MSR_IA32_APERF: //0x000000e8
++        case MSR_APERF_RO: //0xc00000e8
++            {
++                int64_t diff = cppc_update_perfctrs(cppc);
++                *val = acpi_vcpu->delivered_performance_counter
++                    + muldiv64(diff * cppc->counter_scale,
++                                acpi_vcpu->highest_performance,
++                                NANOSECONDS_PER_SECOND);
++            }
++            ret = true;
++            break;
++
++        case MSR_AMD_PERF_LIMIT: //0xc0010061
++            /* Max. P-State, current min. limit */
++            *val = ((1 & 0xF) << 4) | (0 & 0xF);
++            ret = true;
++            break;
++        case MSR_AMD_PERF_CTL: //0xc0010062
++        case MSR_AMD_PERF_STATUS: //0xc0010063
++            /* Max. P-State, current min. limit */
++            *val = acpi_vcpu->pct_status & 0xF;
++            ret = true;
++            break;
++    }
++    qemu_mutex_unlock(&cppc->cppc_state_lock);
++    return ret;
++}
++static bool cppc_wrmsr_main_handler(X86CPU *cpu, uint32_t msr, uint64_t val)
++{
++    CPUState *cs = CPU(cpu);
++    CPPCDevice *cppc = cppc_get_device();
++    bool ret = false;
++    AcpiCPPCStatus *acpi_vcpu;
++
++    assert(cppc);
++    if (cppc == NULL)
++        return false;
++
++    qemu_mutex_lock(&cppc->cppc_state_lock);
++
++    if (cs->cpu_index >= cppc->acpi_processor_count)
++    {
++        qemu_mutex_unlock(&cppc->cppc_state_lock);
++        return false;
++    }
++    acpi_vcpu = &cppc->acpi_processors[cs->cpu_index];
++    assert(acpi_vcpu->main_vcpu < cppc->acpi_processor_count);
++    if (acpi_vcpu->main_vcpu >= cppc->acpi_processor_count)
++    {
++        qemu_mutex_unlock(&cppc->cppc_state_lock);
++        return false;
++    }
++    acpi_vcpu = &cppc->acpi_processors[acpi_vcpu->main_vcpu];
++
++    switch (msr)
++    {
++        case MSR_AMD_CPPC_CAP1: //0xc00102b0
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_ENABLE: //0xc00102b1
++            acpi_vcpu->cppc_enable = (val & 1) == 1;
++            /* Trigger the first perf counter update,
++             * so the OS does not get 0 values initially */
++            cppc_update_perfctrs(cppc);
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_CAP2: //0xc00102b2
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_REQ: //0xc00102b3
++            /* 31:24: Energy preference */
++            /* 23:16: Energy preference */
++            acpi_vcpu->desired_performance = (uint16_t)((val >> 16) & 0xFF);
++            /* 15:8:  Lowest perf preference */
++            /* 7 :0:  Highest perf preference */
++            ret = true;
++            break;
++        case MSR_AMD_CPPC_STATUS: //0xc00102b4
++            acpi_vcpu->performance_limited = (val & 2) == 2;
++            ret = true;
++            break;
++        case MSR_IA32_MPERF: //0x000000e7
++            /* Not entirely correct due to uncommitted updates,
++             * should be good enough */
++            /* NOTE: This affects MPERF_RO. Should be fine? */
++            cppc_update_perfctrs(cppc);
++            acpi_vcpu->reference_performance_counter = val;
++            ret = true;
++            break;
++        case MSR_IA32_APERF: //0x000000e8
++            /* Not entirely correct due to uncommitted updates,
++             * should be good enough */
++            /* NOTE: This affects APERF_RO. Should be fine? */
++            cppc_update_perfctrs(cppc);
++            acpi_vcpu->delivered_performance_counter = val;
++            ret = true;
++            break;
++        case MSR_MPERF_RO: //0xc00000e7
++        case MSR_APERF_RO: //0xc00000e8
++        case MSR_AMD_PERF_LIMIT: //0xc0010061
++        case MSR_AMD_PERF_STATUS: //0xc0010063
++            ret = false;
++            break;
++        case MSR_AMD_PERF_CTL: /* _PCT Control / 0xc0010062 */
++            val = val & 0x0F;
++            if (val <= 1)
++                acpi_vcpu->pct_status = val;
++            ret = true;
++            break;
++    }
++    qemu_mutex_unlock(&cppc->cppc_state_lock);
++    return ret;
++}
++static bool cppc_msr_isset = false;
++static bool cppc_msr_init(Error **errp)
++{
++    //Assuming there is only one thread 'realizing' devices
++    if (!cppc_msr_isset)
++    {
++        int ret;
++        ret = kvm_provide_msr(kvm_state,
++                              _MSR_AMD_CPPC_FIRST, _MSR_AMD_CPPC_COUNT,
++                              &cppc_rdmsr_main_handler,
++                              &cppc_wrmsr_main_handler, true);
++        if (ret < 0) {
++            error_setg(errp, "CPPC: Could not register the CPPC MSRs (is KVM in use?): %s",
++                       strerror(-ret));
++            return false;
++        }
++        ret = kvm_provide_msr(kvm_state,
++                              _MSR_AMD_PERF_FIRST, _MSR_AMD_PERF_COUNT,
++                              &cppc_rdmsr_main_handler,
++                              &cppc_wrmsr_main_handler, true);
++        if (ret < 0) {
++            error_setg(errp, "CPPC: Could not register the P-State MSRs: %s",
++                       strerror(-ret));
++            return false;
++        }
++
++        //NOTE: Providing the performance counter MSRs through QEMU will cause a high context switch penalty.
++        //The most performant way is to pass through these MSRs to the host CPU (needs a KVM patch).
++        //This might open up timing-/frequency-based side-channels to the guest OS.
++
++        //ret = kvm_provide_msr(kvm_state,
++        //                      MSR_IA32_MPERF, 2,
++        //                      &cppc_rdmsr_main_handler,
++        //                      &cppc_wrmsr_main_handler, true);
++        //if (ret < 0) {
++        //    error_setg(errp, "CPPC: Could not register the MPERF/APERF MSRs: %s",
++        //               strerror(-ret));
++        //    return false;
++        //}
++        //ret = kvm_provide_msr(kvm_state,
++        //                      MSR_MPERF_RO, 2,
++        //                      &cppc_rdmsr_main_handler,
++        //                      &cppc_wrmsr_main_handler, true);
++        //if (ret < 0) {
++        //    error_setg(errp, "CPPC: Could not register the MPERF_RO/APERF_RO MSRs: %s",
++        //               strerror(-ret));
++        //    return false;
++        //}
++        cppc_msr_isset = true;
++    }
++    return true;
++}
++static void cppc_set_perf_csr_passthrough(void)
++{
++    int ret;
++    ret = kvm_vm_enable_disable_exits(kvm_state, KVM_X86_DISABLE_EXITS_APERFMPERF);
++    if (ret < 0) {
++        warn_report("cppc: could not pass-through APERF/MPERF: %s",
++                    strerror(-ret));
++    }
++}
++#else
++static bool cppc_hv_msr_init(Error **errp)
++{
++    return true;
++}
++static bool cppc_msr_init(Error **errp)
++{
++    error_setg(errp, "CPPC MSR mode: Unsupported platform (requires x86 and KVM)");
++    return false;
++}
++static void cppc_set_perf_csr_passthrough(void)
++{
++}
++#endif
++
++static void cppc_realizefn(DeviceState *d, Error **errp)
++{
++    /* Device */
++    //SysBusDevice *sysbus = SYS_BUS_DEVICE(d);
++    CPPCDevice *cppc = CPPCDEVICE(d);
++    MemoryRegion *mem = NULL;
++    /* Machine, CPU */
++    MachineState *machine = MACHINE(qdev_get_machine());
++    MachineClass *mc = MACHINE_GET_CLASS(machine);
++    const CPUArchIdList *id_list;
++
++    qemu_mutex_init(&cppc->cppc_state_lock);
++
++    if (!cppc_hv_msr_init(errp))
++        return;
++    /* Disabled for now: cppc_set_perf_csr_passthrough(); */
++
++    /* Retrieve CPU list, allocate corresponding array */
++    assert(mc->possible_cpu_arch_ids);
++    id_list = mc->possible_cpu_arch_ids(machine);
++    cppc->acpi_processor_count = id_list->len;
++    cppc->acpi_processors = g_new0(typeof(*cppc->acpi_processors),
++                                    cppc->acpi_processor_count);
++
++    cppc_set_from_caps(cppc);
++    /* acpi_vcpu->reference_performance_counter = 0 */
++    /* acpi_vcpu->delivered_performance_counter = 0 */
++    /* acpi_vcpu->performance_limited = false */
++    /* acpi_vcpu->cppc_enable = false */
++
++    switch (cppc->iomem_space)
++    {
++        case 0: /* System Memory */
++            if (cppc->iomem_offset == 0) {
++                /* Set default */
++                cppc->iomem_offset = 0x80000000000;
++            }
++            /* Using get_system_memory directly rather than sysbus_address_space. */
++            mem = get_system_memory();
++            break;
++        case 1: /* System IO */
++            if (cppc->iomem_offset == 0) {
++                /* Set default */
++                cppc->iomem_offset = 0x0100;
++            }
++            else if (
++                (cppc->iomem_offset & ~0xFFFFULL)
++                || ((cppc->iomem_offset + cppc->acpi_processor_count * SYSTEMIO_TOTAL_LEN_PERCPU) & ~0xFFFFULL))
++            {
++                error_setg(errp, "CPPC: System IO address range must not exceed low 64K");
++                break;
++            }
++            mem = get_system_io();
++            break;
++        case 2: /* AMD MSR */
++            cppc_msr_init(errp);
++            break;
++        default:
++            error_setg(errp, "CPPC: Undefined memory space %u", cppc->iomem_space);
++            break;
++    }
++    if (mem != NULL) {
++        uint32_t len;
++        if (cppc->iomem_shared_address) {
++            len = 1 * cppc_len_per_cpu(cppc);
++        } else {
++            len = cppc->acpi_processor_count * cppc_len_per_cpu(cppc);
++        }
++        memory_region_init_io(&cppc->iomem, OBJECT(d), &cppc_ops, cppc,
++            "cppc-iomem", len);
++        memory_region_add_subregion(mem, (hwaddr)cppc->iomem_offset, &cppc->iomem);
++        //if (cppc->iomem_space == 1) /* System IO */
++        //    sysbus_init_ioports(SYS_BUS_DEVICE(sysbus_get_default()), (hwaddr)cppc->iomem_offset, len);
++    }
++}
++
++static void cppc_unrealizefn(DeviceState *d)
++{
++    CPPCDevice *cppc = CPPCDEVICE(d);
++
++    g_free(cppc->acpi_processors);
++    cppc->acpi_processors = NULL;
++}
++
++static void cppc_object_finalize(Object *obj)
++{
++    CPPCDevice *cppc = CPPCDEVICE(obj);
++    g_free(cppc->acpi_processors);
++    g_free(cppc->config_caps);
++}
++
++const VMStateDescription vmstate_cppc_status = {
++    .name = "CPPC processor status",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .fields      = (VMStateField[]) {
++        VMSTATE_UINT32(main_vcpu, AcpiCPPCStatus),
++        VMSTATE_UINT8(vcpu_domain_size, AcpiCPPCStatus),
++        VMSTATE_UINT16(highest_performance, AcpiCPPCStatus),
++        VMSTATE_UINT16(nominal_performance, AcpiCPPCStatus),
++        VMSTATE_UINT16(lowest_nonlinear_performance, AcpiCPPCStatus),
++        VMSTATE_UINT16(lowest_performance, AcpiCPPCStatus),
++        VMSTATE_UINT16(desired_performance, AcpiCPPCStatus),
++        VMSTATE_UINT64(reference_performance_counter, AcpiCPPCStatus),
++        VMSTATE_UINT64(delivered_performance_counter, AcpiCPPCStatus),
++        VMSTATE_BOOL(performance_limited, AcpiCPPCStatus),
++        VMSTATE_BOOL(cppc_enable, AcpiCPPCStatus),
++        VMSTATE_END_OF_LIST()
++    }
++};
++const VMStateDescription vmstate_cppc = {
++    .name = "CPPC state",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .fields      = (VMStateField[]) {
++        VMSTATE_INT64(clock_lastupdate, CPPCDevice),
++        VMSTATE_STRUCT_VARRAY_POINTER_UINT32(acpi_processors, CPPCDevice, acpi_processor_count,
++                                             vmstate_cppc_status, AcpiCPPCStatus),
++        VMSTATE_END_OF_LIST()
++    }
++};
++static const Property cppc_properties[] = {
++    DEFINE_PROP_BOOL("addr_shared", CPPCDevice, iomem_shared_address, false),
++    /*0: System Memory; 1: System IO; 2: MSR*/
++    DEFINE_PROP_UINT8("addrspace", CPPCDevice, iomem_space, CPPC_DEFAULT_ADDRSPACE),
++    DEFINE_PROP_UINT64("address", CPPCDevice, iomem_offset, 0),
++    DEFINE_PROP_UINT32("counter_scale", CPPCDevice, counter_scale, 1),
++    DEFINE_PROP_ARRAY("processors", CPPCDevice,
++                      num_config_caps, config_caps,
++                      qdev_prop_cppc_processor_caps, CPPCProcessorCaps),
++};
++
++static void cppc_class_init(ObjectClass *klass, const void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    device_class_set_props(dc, cppc_properties);
++
++    dc->vmsd    = &vmstate_cppc;
++    dc->realize = cppc_realizefn;
++    dc->unrealize = cppc_unrealizefn;
++    dc->hotpluggable = false;
++    dc->user_creatable = true;
++}
++
++static const TypeInfo cppc_type = {
++    .name          = TYPE_CPPCDEVICE,
++    .parent        = TYPE_DEVICE,//TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(CPPCDevice),
++    .class_init    = cppc_class_init,
++    .instance_finalize = cppc_object_finalize,
++};
++
++static void cppc_register(void)
++{
++    type_register_static(&cppc_type);
++}
++
++type_init(cppc_register);
++
++
++/* device_list based on util/nvdimm-utils.c */
++
++static int cppc_device_list(Object *obj, void *opaque)
++{
++    CPPCDevice **dev = opaque;
++
++    if (*dev == NULL && object_dynamic_cast(obj, TYPE_CPPCDEVICE)) {
++        *dev = CPPCDEVICE(obj);
++        return 0;
++    }
++
++    object_child_foreach(obj, cppc_device_list, opaque);
++    return 0;
++}
++
++/* Retrieves the last CPPC device */
++CPPCDevice *cppc_get_device(void)
++{
++    CPPCDevice *dev = NULL;
++    object_child_foreach(qdev_get_machine(), cppc_device_list, &dev);
++    return dev;
++}
 diff --git a/hw/acpi/cpu.c b/hw/acpi/cpu.c
 index 6f1ae79e..af167960 100644
 --- a/hw/acpi/cpu.c
@@ -1692,6 +2847,85 @@ index f38e1297..bf1ce43a 100644
  Aml *aml_interrupt(AmlConsumerAndProducer con_and_pro,
                     AmlLevelAndEdge level_and_edge,
                     AmlActiveHighAndLow high_and_low, AmlShared shared,
+diff --git a/include/hw/acpi/cppc.h b/include/hw/acpi/cppc.h
+new file mode 100644
+index 00000000..d652fecb
+--- /dev/null
++++ b/include/hw/acpi/cppc.h
+@@ -0,0 +1,73 @@
++#ifndef ACPI_CPPC_H
++#define ACPI_CPPC_H
++
++#include "hw/qdev-core.h"
++#include "hw/acpi/acpi.h"
++#include "hw/acpi/aml-build.h"
++#include "hw/hotplug.h"
++#include "hw/qdev-core.h"
++#include "hw/qdev-properties.h"
++
++typedef struct AcpiCPPCStatus {
++    /* First vCPU sharing the CPPC registers */
++    uint32_t main_vcpu;
++    /* Amount of vCPUs sharing the same CPPC registers (only set for the main vCPU) */
++    uint8_t vcpu_domain_size;
++    uint16_t highest_performance; /* read-only */
++    uint16_t nominal_performance; /* read-only */
++    uint16_t lowest_nonlinear_performance; /* read-only */
++    uint16_t lowest_performance; /* read-only */
++    uint16_t desired_performance; /* read-write, Optional if OSPM indicates CPPC2 support in _OSC and 'Autonomous Selection' is on */
++
++    /* Counter increasing at nominal_performance rate (as reference performance is undefined) */
++    uint64_t reference_performance_counter; /* read-only */
++    /* On a physical system, the delivered performance counter would e.g. depend on actual clock frequency */
++    /* Will provide fake values, since we are not strictly bound to a physical CPU. */
++    uint64_t delivered_performance_counter; /* read-only */
++    bool performance_limited; /* read-write(clear) */
++    bool cppc_enable; /* write-only (set) */
++    //Autonomous selection: always enabled (-> we don't actually control CPU performance).
++
++    uint8_t pct_status;
++
++} AcpiCPPCStatus;
++
++/* Processor capability configuration */
++typedef struct CPPCProcessorCaps {
++    uint32_t vcpu;
++    uint32_t main_vcpu;
++    uint16_t highest_performance;
++    uint16_t nominal_performance;
++    uint16_t lowest_nonlinear_performance;
++    uint16_t lowest_performance;
++} CPPCProcessorCaps;
++
++typedef struct CPPCDevice {
++    DeviceState parent_obj;
++
++    QemuMutex cppc_state_lock;
++
++    int64_t clock_lastupdate;
++    /* The time scale for processor performance counters,
++     * 1 being an increase by highest_performance,nominal_performance per second. */
++    uint32_t counter_scale;
++
++    /* If set, share registers across _CPCs and differentiate by VM thread */
++    bool iomem_shared_address;
++    /* Memory space to use for _CPC */
++    uint8_t iomem_space;
++    /* not hwaddr due to assignment via PROP */
++    uint64_t iomem_offset;
++    uint32_t num_config_caps;
++    CPPCProcessorCaps *config_caps;
++
++    MemoryRegion iomem;
++    uint32_t acpi_processor_count;
++    AcpiCPPCStatus *acpi_processors;
++} CPPCDevice;
++
++void cppc_aml(Aml *processor, int uid, CPPCDevice *device);
++
++CPPCDevice *cppc_get_device(void);
++
++#endif
 diff --git a/include/hw/acpi/generic_event_device.h b/include/hw/acpi/generic_event_device.h
 index 130c014d..4c2425b7 100644
 --- a/include/hw/acpi/generic_event_device.h
