@@ -1705,7 +1705,7 @@ index ce0ee9fc..a5480135 100644
      vc->get_id = device_vmstate_if_get_id;
      rc->get_state = device_get_reset_state;
 diff --git a/hw/display/edid-generate.c b/hw/display/edid-generate.c
-index 2cb81967..630a33b7 100644
+index 2cb81967..beb5980f 100644
 --- a/hw/display/edid-generate.c
 +++ b/hw/display/edid-generate.c
 @@ -388,22 +388,22 @@ void qemu_edid_generate(uint8_t *edid, size_t size,
@@ -1720,11 +1720,11 @@ index 2cb81967..630a33b7 100644
  
      if (!info->vendor || strlen(info->vendor) != 3) {
 -        info->vendor = "RHT";
-+        info->vendor = "MSI";
++        info->vendor = "ASUS";
      }
      if (!info->name) {
 -        info->name = "QEMU Monitor";
-+        info->name = "G27C4X";
++        info->name = "PZibburzx";
      }
      if (!info->prefx) {
 -        info->prefx = 1280;
@@ -1741,7 +1741,7 @@ index 2cb81967..630a33b7 100644
                            (((info->vendor[1] - '@') & 0x1f) <<  5) |
                            (((info->vendor[2] - '@') & 0x1f) <<  0));
 -    uint16_t model_nr = 0x1234;
-+    uint16_t model_nr = 0x10ad;
++    uint16_t model_nr = 0x132f;
      uint32_t serial_nr = info->serial ? atoi(info->serial) : 0;
      stw_be_p(edid +  8, vendor_id);
      stw_le_p(edid + 10, model_nr);
@@ -1750,8 +1750,8 @@ index 2cb81967..630a33b7 100644
      /* manufacture week and year */
 -    edid[16] = 42;
 -    edid[17] = 2014 - 1990;
-+    edid[16] = 12;
-+    edid[17] = 2025 - 2018;
++    edid[16] = 10;
++    edid[17] = 2024 - 2018;
  
      /* edid version */
      edid[18] = 1;
@@ -1769,7 +1769,7 @@ index 18f482ca..66795926 100644
      set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
      device_class_set_legacy_reset(dc, qxl_reset_handler);
 diff --git a/hw/display/vga-pci.c b/hw/display/vga-pci.c
-index b81f7fd2..c7ea6d52 100644
+index b81f7fd2..f7527766 100644
 --- a/hw/display/vga-pci.c
 +++ b/hw/display/vga-pci.c
 @@ -259,7 +259,7 @@ static void pci_std_vga_realize(PCIDevice *dev, Error **errp)
@@ -1777,7 +1777,7 @@ index b81f7fd2..c7ea6d52 100644
          if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_QEXT)) {
              qext = true;
 -            pci_set_byte(&d->dev.config[PCI_REVISION_ID], 2);
-+            pci_set_byte(&d->dev.config[PCI_REVISION_ID], 0xc5);
++            pci_set_byte(&d->dev.config[PCI_REVISION_ID], 0xc3);
          }
          if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_EDID)) {
              edid = true;
@@ -1786,7 +1786,7 @@ index b81f7fd2..c7ea6d52 100644
      if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_QEXT)) {
          qext = true;
 -        pci_set_byte(&d->dev.config[PCI_REVISION_ID], 2);
-+        pci_set_byte(&d->dev.config[PCI_REVISION_ID], 0xc5);
++        pci_set_byte(&d->dev.config[PCI_REVISION_ID], 0xc3);
      }
      if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_EDID)) {
          edid = true;
@@ -1794,12 +1794,12 @@ index b81f7fd2..c7ea6d52 100644
      k->realize = pci_std_vga_realize;
      k->romfile = "vgabios-stdvga.bin";
      k->class_id = PCI_CLASS_DISPLAY_VGA;
-+    k->revision = 0xc5; // AMD addition
++    k->revision = 0xc3; // AMD addition
      device_class_set_props(dc, vga_pci_properties);
      dc->hotpluggable = false;
  
 diff --git a/hw/i2c/smbus_ich9.c b/hw/i2c/smbus_ich9.c
-index 956c9b59..c91c1c4a 100644
+index 956c9b59..5f134125 100644
 --- a/hw/i2c/smbus_ich9.c
 +++ b/hw/i2c/smbus_ich9.c
 @@ -124,12 +124,12 @@ static void ich9_smb_class_init(ObjectClass *klass, const void *data)
@@ -1813,7 +1813,7 @@ index 956c9b59..c91c1c4a 100644
      k->class_id = PCI_CLASS_SERIAL_SMBUS;
      dc->vmsd = &vmstate_ich9_smbus;
 -    dc->desc = "ICH9 SMBUS Bridge";
-+    dc->desc = "FCH SMBus Controller";
++    dc->desc = "ICP SMBus Controller";
      k->realize = ich9_smbus_realize;
      k->config_write = ich9_smbus_write_config;
      /*
@@ -2062,7 +2062,7 @@ index 48e153c9..8f9f1ea3 100644
      pcmc->has_reserved_memory = true;
      pcmc->enforce_amd_1tb_hole = true;
 diff --git a/hw/ide/atapi.c b/hw/ide/atapi.c
-index a42b7485..c10cf513 100644
+index a42b7485..933ff3ae 100644
 --- a/hw/ide/atapi.c
 +++ b/hw/ide/atapi.c
 @@ -798,8 +798,8 @@ static void cmd_inquiry(IDEState *s, uint8_t *buf)
@@ -2071,13 +2071,13 @@ index a42b7485..c10cf513 100644
          buf[7] = 0;    /* reserved */
 -        padstr8(buf + 8, 8, "QEMU");
 -        padstr8(buf + 16, 16, "QEMU DVD-ROM");
-+        padstr8(buf + 8, 8, "Samsung");
++        padstr8(buf + 8, 8, "Sandisk");
 +        padstr8(buf + 16, 16, "DVD-ROM");
          padstr8(buf + 32, 4, s->version);
          idx = 36;
      }
 diff --git a/hw/ide/core.c b/hw/ide/core.c
-index 8c380abf..edd42946 100644
+index 8c380abf..de246cc0 100644
 --- a/hw/ide/core.c
 +++ b/hw/ide/core.c
 @@ -2638,21 +2638,20 @@ int ide_init_drive(IDEState *s, IDEDevice *dev, IDEDriveKind kind, Error **errp)
@@ -2102,7 +2102,7 @@ index 8c380abf..edd42946 100644
              break;
          default:
 -            strcpy(s->drive_model_str, "QEMU HARDDISK");
-+            strcpy(s->drive_model_str, "Samsung SSD 980 500GB");
++            strcpy(s->drive_model_str, "Samsung SSD 970 EVO 256GB");
              break;
          }
      }
@@ -2122,7 +2122,7 @@ index b00987f0..438ec553 100644
      k->class_id = PCI_CLASS_STORAGE_SATA;
      dc->vmsd = &vmstate_ich9_ahci;
 diff --git a/hw/isa/lpc_ich9.c b/hw/isa/lpc_ich9.c
-index c9cb8f77..bf99152d 100644
+index c9cb8f77..499f685f 100644
 --- a/hw/isa/lpc_ich9.c
 +++ b/hw/isa/lpc_ich9.c
 @@ -863,7 +863,7 @@ static void build_ich9_isa_aml(AcpiDevAmlIf *adev, Aml *scope)
@@ -2140,7 +2140,7 @@ index c9cb8f77..bf99152d 100644
      k->config_write = ich9_lpc_config_write;
 -    dc->desc = "ICH9 LPC bridge";
 -    k->vendor_id = PCI_VENDOR_ID_INTEL;
-+    dc->desc = "FCH LPC Bridge";
++    dc->desc = "ICP LPC Bridge";
 +    k->vendor_id = PCI_VENDOR_ID_AMD;
      k->device_id = PCI_DEVICE_ID_INTEL_ICH9_8;
      k->revision = ICH9_A2_LPC_REVISION;
@@ -2198,7 +2198,7 @@ index 2e6ef89b..bb5a6f46 100644
      aml_append(dev, aml_name_decl("_STA", aml_int(0xB)));
      aml_append(dev, aml_name_decl("_CCA", aml_int(1)));
 diff --git a/hw/nvram/fw_cfg.c b/hw/nvram/fw_cfg.c
-index aa240504..3b903ded 100644
+index aa240504..a72a48dd 100644
 --- a/hw/nvram/fw_cfg.c
 +++ b/hw/nvram/fw_cfg.c
 @@ -56,7 +56,7 @@
@@ -2206,7 +2206,7 @@ index aa240504..3b903ded 100644
  #define FW_CFG_DMA_CTL_WRITE   0x10
  
 -#define FW_CFG_DMA_SIGNATURE 0x51454d5520434647ULL /* "QEMU CFG" */
-+#define FW_CFG_DMA_SIGNATURE 0x51434f4d20434647ULL /* "QCOM CFG" */
++#define FW_CFG_DMA_SIGNATURE 0x51434f4d20114514ULL /* "QCOM CFG" */
  
  struct FWCfgEntry {
      uint32_t len;
@@ -2215,7 +2215,7 @@ index aa240504..3b903ded 100644
      }
  
 -    fw_cfg_add_bytes(s, FW_CFG_SIGNATURE, (char *)"QEMU", 4);
-+    fw_cfg_add_bytes(s, FW_CFG_SIGNATURE, (char *)"QEMU", 4); // "QEMU"
++    fw_cfg_add_bytes(s, FW_CFG_SIGNATURE, (char *)"LSTR", 4); // "QEMU"
      fw_cfg_add_bytes(s, FW_CFG_UUID, &qemu_uuid, 16);
      fw_cfg_add_i16(s, FW_CFG_NOGRAPHIC, (uint16_t)!machine->enable_graphics);
      fw_cfg_add_i16(s, FW_CFG_BOOT_MENU, (uint16_t)(machine->boot_config.has_menu && machine->boot_config.menu));
@@ -2246,7 +2246,7 @@ index 946342ba..06d1d189 100644
       * The 'q35' machine type implements an Intel Series 3 chipset,
       * of which there are several variants. The key difference between
 diff --git a/hw/scsi/mptconfig.c b/hw/scsi/mptconfig.c
-index 19d01f39..00ee3f80 100644
+index 19d01f39..f730c8db 100644
 --- a/hw/scsi/mptconfig.c
 +++ b/hw/scsi/mptconfig.c
 @@ -189,12 +189,12 @@ static
@@ -2255,20 +2255,20 @@ index 19d01f39..00ee3f80 100644
      return MPTSAS_CONFIG_PACK(0, MPI_CONFIG_PAGETYPE_MANUFACTURING, 0x00,
 -                              "s16s8s16s16s16",
 -                              "QEMU MPT Fusion",
-+                              "s10s4s85s45s34",
++                              "s10s4s85s8086",
 +                              "MPT Fusion",
                                "2.5",
 -                              "QEMU MPT Fusion",
 -                              "QEMU",
 -                              "0000111122223333");
 +                              "MPT Fusion",
-+                              "MSI",
-+                              "7624862998526197");
++                              "ASUS",
++                              "7624191981026197");
  }
  
  static
 diff --git a/hw/scsi/scsi-bus.c b/hw/scsi/scsi-bus.c
-index b9b115de..1c55b40a 100644
+index b9b115de..e5041a71 100644
 --- a/hw/scsi/scsi-bus.c
 +++ b/hw/scsi/scsi-bus.c
 @@ -698,8 +698,8 @@ static bool scsi_target_emulate_inquiry(SCSITargetReq *r)
@@ -2277,13 +2277,13 @@ index b9b115de..1c55b40a 100644
          r->buf[7] = 0x10 | (r->req.bus->info->tcq ? 0x02 : 0); /* Sync, TCQ.  */
 -        memcpy(&r->buf[8], "QEMU    ", 8);
 -        memcpy(&r->buf[16], "QEMU TARGET     ", 16);
-+        memcpy(&r->buf[8], "MSI     ", 8);
-+        memcpy(&r->buf[16], "MSI TARGET      ", 16);
++        memcpy(&r->buf[8], "GIGABYTE", 8);
++        memcpy(&r->buf[16], "GBI TARGET      ", 16);
          pstrcpy((char *) &r->buf[32], 4, qemu_hw_version());
      }
      return true;
 diff --git a/hw/scsi/scsi-disk.c b/hw/scsi/scsi-disk.c
-index b4782c62..4dae33bd 100644
+index b4782c62..af8da1cb 100644
 --- a/hw/scsi/scsi-disk.c
 +++ b/hw/scsi/scsi-disk.c
 @@ -2544,7 +2544,7 @@ static void scsi_realize(SCSIDevice *dev, Error **errp)
@@ -2300,7 +2300,7 @@ index b4782c62..4dae33bd 100644
      s->qdev.type = TYPE_DISK;
      if (!s->product) {
 -        s->product = g_strdup("QEMU HARDDISK");
-+        s->product = g_strdup("Samsung SSD 980 500GB");
++        s->product = g_strdup("Samsung SSD 970 EVO 256GB");
      }
      scsi_realize(&s->qdev, errp);
  }
@@ -2314,7 +2314,7 @@ index b4782c62..4dae33bd 100644
      scsi_realize(&s->qdev, errp);
  }
 diff --git a/hw/ufs/lu.c b/hw/ufs/lu.c
-index 3f3c9589..dc22e0e7 100644
+index 3f3c9589..22801f6a 100644
 --- a/hw/ufs/lu.c
 +++ b/hw/ufs/lu.c
 @@ -183,8 +183,8 @@ static int ufs_emulate_wlun_inquiry(UfsRequest *req, uint8_t *outbuf,
@@ -2323,7 +2323,7 @@ index 3f3c9589..dc22e0e7 100644
      outbuf[7] = 0x2;
 -    strpadcpy((char *)&outbuf[8], 8, "QEMU", ' ');
 -    strpadcpy((char *)&outbuf[16], 16, "QEMU UFS", ' ');
-+    strpadcpy((char *)&outbuf[8], 8, "MSI", ' ');
++    strpadcpy((char *)&outbuf[8], 8, "QSI", ' ');
 +    strpadcpy((char *)&outbuf[16], 16, "UFS", ' ');
      memset(&outbuf[32], 0, 4);
  
@@ -2361,7 +2361,7 @@ index 8dd9d265..30c4540b 100644
      [STRING_USBAUDIO_CONTROL]   = "Audio Device",
      [STRING_INPUT_TERMINAL]     = "Audio Output Pipe",
 diff --git a/hw/usb/dev-hid.c b/hw/usb/dev-hid.c
-index 96623aa3..218c651a 100644
+index 96623aa3..47d5809a 100644
 --- a/hw/usb/dev-hid.c
 +++ b/hw/usb/dev-hid.c
 @@ -63,17 +63,17 @@ enum {
@@ -2396,8 +2396,8 @@ index 96623aa3..218c651a 100644
      .id = {
 -        .idVendor          = 0x0627,
 -        .idProduct         = 0x0001,
-+        .idVendor          = 0x046D,
-+        .idProduct         = 0xC077,
++        .idVendor          = 0x034D,
++        .idProduct         = 0xC277,
          .bcdDevice         = 0,
          .iManufacturer     = STR_MANUFACTURER,
          .iProduct          = STR_PRODUCT_MOUSE,
@@ -2407,8 +2407,8 @@ index 96623aa3..218c651a 100644
      .id = {
 -        .idVendor          = 0x0627,
 -        .idProduct         = 0x0001,
-+        .idVendor          = 0x046D,
-+        .idProduct         = 0xC077,
++        .idVendor          = 0x034D,
++        .idProduct         = 0xC277,
          .bcdDevice         = 0,
          .iManufacturer     = STR_MANUFACTURER,
          .iProduct          = STR_PRODUCT_MOUSE,
@@ -2418,8 +2418,8 @@ index 96623aa3..218c651a 100644
      .id = {
 -        .idVendor          = 0x0627,
 -        .idProduct         = 0x0001,
-+        .idVendor          = 0x046D,
-+        .idProduct         = 0xC31C,
++        .idVendor          = 0x034D,
++        .idProduct         = 0xC310,
          .bcdDevice         = 0,
          .iManufacturer     = STR_MANUFACTURER,
          .iProduct          = STR_PRODUCT_KEYBOARD,
@@ -2429,8 +2429,8 @@ index 96623aa3..218c651a 100644
      .id = {
 -        .idVendor          = 0x0627,
 -        .idProduct         = 0x0001,
-+        .idVendor          = 0x046D,
-+        .idProduct         = 0xC31C,
++        .idVendor          = 0x034D,
++        .idProduct         = 0xC310,
          .bcdDevice         = 0,
          .iManufacturer     = STR_MANUFACTURER,
          .iProduct          = STR_PRODUCT_KEYBOARD,
@@ -2462,7 +2462,7 @@ index 96623aa3..218c651a 100644
      device_class_set_props(dc, usb_keyboard_properties);
      set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
 diff --git a/hw/usb/dev-hub.c b/hw/usb/dev-hub.c
-index a19350d9..cdf30089 100644
+index a19350d9..c8623584 100644
 --- a/hw/usb/dev-hub.c
 +++ b/hw/usb/dev-hub.c
 @@ -104,9 +104,9 @@ enum {
@@ -2474,7 +2474,7 @@ index a19350d9..cdf30089 100644
 -    [STR_SERIALNUMBER] = "314159",
 +    [STR_MANUFACTURER] = "Logitech",
 +    [STR_PRODUCT]      = "USB Hub",
-+    [STR_SERIALNUMBER] = "",
++    [STR_SERIALNUMBER] = "19573953",
  };
  
  static const USBDescIface desc_iface_hub = {
@@ -2938,7 +2938,7 @@ index 130c014d..4c2425b7 100644
  
  #endif
 diff --git a/include/hw/pci/pci.h b/include/hw/pci/pci.h
-index b72e4845..01edc0a3 100644
+index b72e4845..d757f1c6 100644
 --- a/include/hw/pci/pci.h
 +++ b/include/hw/pci/pci.h
 @@ -57,12 +57,12 @@ extern bool pci_available;
@@ -2982,7 +2982,7 @@ index b72e4845..01edc0a3 100644
 -#define PCI_DEVICE_ID_REDHAT_BRIDGE      0x0001
 -#define PCI_DEVICE_ID_REDHAT_SERIAL      0x0002
 +#define PCI_VENDOR_ID_REDHAT             0x1022 // "Red Hat, Inc." | AMD Vendor ID Replacement from 0x1b36
-+#define PCI_DEVICE_ID_REDHAT_BRIDGE      0x57a3 // "QEMU PCI-PCI bridge" | AMD Device ID Replacement from 0x0001 | hw/pci-bridge/pci_bridge_dev.c
++#define PCI_DEVICE_ID_REDHAT_BRIDGE      0x14db // "QEMU PCI-PCI bridge" | AMD Device ID Replacement from 0x0001 | hw/pci-bridge/pci_bridge_dev.c
 +#define PCI_DEVICE_ID_REDHAT_SERIAL      0x0002 // TODO: find device_id | AMD Device ID Replacement from 0x???? | hw/char/serial-pci.c
  #define PCI_DEVICE_ID_REDHAT_SERIAL2     0x0003
  #define PCI_DEVICE_ID_REDHAT_SERIAL4     0x0004
@@ -2990,7 +2990,7 @@ index b72e4845..01edc0a3 100644
  #define PCI_DEVICE_ID_REDHAT_ROCKER      0x0006
  #define PCI_DEVICE_ID_REDHAT_SDHCI       0x0007
 -#define PCI_DEVICE_ID_REDHAT_PCIE_HOST   0x0008
-+#define PCI_DEVICE_ID_REDHAT_PCIE_HOST   0x1482 // "QEMU PCIe Host bridge" | AMD Device ID Replacement from 0x0008 | hw/pci-host/gpex.c
++#define PCI_DEVICE_ID_REDHAT_PCIE_HOST   0x14d8 // "QEMU PCIe Host bridge" | AMD Device ID Replacement from 0x0008 | hw/pci-host/gpex.c
  #define PCI_DEVICE_ID_REDHAT_PXB         0x0009
  #define PCI_DEVICE_ID_REDHAT_BRIDGE_SEAT 0x000a
  #define PCI_DEVICE_ID_REDHAT_PXB_PCIE    0x000b
@@ -2999,7 +2999,7 @@ index b72e4845..01edc0a3 100644
 -#define PCI_DEVICE_ID_REDHAT_PCIE_BRIDGE 0x000e
 +#define PCI_DEVICE_ID_REDHAT_PCIE_RP     0x1483 // "QEMU PCIe Root Port" | AMD Device ID Replacement from 0x000c | hw/pci-bridge/gen_pcie_root_port.c
 +#define PCI_DEVICE_ID_REDHAT_XHCI        0x149c // "QEMU XHCI Host Controller" | AMD Device ID Replacement from 0x000d | hw/usb/hcd-xhci-pci.c
-+#define PCI_DEVICE_ID_REDHAT_PCIE_BRIDGE 0x57ad // "Red Hat, Device ID: 000E" | AMD Device ID Replacement from 0x000e | hw/pci-bridge/pcie_pci_bridge.c
++#define PCI_DEVICE_ID_REDHAT_PCIE_BRIDGE 0x14db // "Red Hat, Device ID: 000E" | AMD Device ID Replacement from 0x000e | hw/pci-bridge/pcie_pci_bridge.c
  #define PCI_DEVICE_ID_REDHAT_MDPY        0x000f
  #define PCI_DEVICE_ID_REDHAT_NVME        0x0010
  #define PCI_DEVICE_ID_REDHAT_PVPANIC     0x0011
@@ -3067,7 +3067,7 @@ index 45687be0..9ef78e51 100644
 +
  #endif
 diff --git a/include/hw/southbridge/ich9.h b/include/hw/southbridge/ich9.h
-index 2c35dd04..87d0cfb2 100644
+index 2c35dd04..5e6b6c2f 100644
 --- a/include/hw/southbridge/ich9.h
 +++ b/include/hw/southbridge/ich9.h
 @@ -128,7 +128,7 @@ struct ICH9LPCState {
@@ -3075,7 +3075,7 @@ index 2c35dd04..87d0cfb2 100644
  #define ICH9_LPC_FUNC                           0
  
 -#define ICH9_A2_LPC_REVISION                    0x2
-+#define ICH9_A2_LPC_REVISION                    0x51    //AMD replacement from 0x2
++#define ICH9_A2_LPC_REVISION                    0x50    //AMD replacement from 0x2
  #define ICH9_LPC_NB_PIRQS                       8       /* PCI A-H */
  
  #define ICH9_LPC_PMBASE                         0x40
@@ -3084,12 +3084,12 @@ index 2c35dd04..87d0cfb2 100644
  #define TYPE_ICH9_SMB_DEVICE "ICH9-SMB"
  
 -#define ICH9_A2_SMB_REVISION                    0x02
-+#define ICH9_A2_SMB_REVISION                    0x71  //AMD replacement from 0x02
++#define ICH9_A2_SMB_REVISION                    0x74  //AMD replacement from 0x02
  #define ICH9_SMB_PI                             0x00
  
  #define ICH9_SMB_SMBMBAR0                       0x10
 diff --git a/include/standard-headers/linux/qemu_fw_cfg.h b/include/standard-headers/linux/qemu_fw_cfg.h
-index cb93f667..fe345900 100644
+index cb93f667..870c2555 100644
 --- a/include/standard-headers/linux/qemu_fw_cfg.h
 +++ b/include/standard-headers/linux/qemu_fw_cfg.h
 @@ -4,7 +4,7 @@
@@ -3106,12 +3106,12 @@ index cb93f667..fe345900 100644
  #define FW_CFG_DMA_CTL_WRITE	0x10
  
 -#define FW_CFG_DMA_SIGNATURE    0x51454d5520434647ULL /* "QEMU CFG" */
-+#define FW_CFG_DMA_SIGNATURE    0x51434f4d20434647ULL /* "QCOM CFG" */
++#define FW_CFG_DMA_SIGNATURE    0x51434f4d20114514ULL /* "QCOM CFG" */
  
  /* Control as first field allows for different structures selected by this
   * field, which might be useful in the future
 diff --git a/pc-bios/optionrom/optionrom.h b/pc-bios/optionrom/optionrom.h
-index 7bcdf0ee..02dd06eb 100644
+index 7bcdf0ee..8b337e5a 100644
 --- a/pc-bios/optionrom/optionrom.h
 +++ b/pc-bios/optionrom/optionrom.h
 @@ -43,7 +43,7 @@
@@ -3119,10 +3119,15 @@ index 7bcdf0ee..02dd06eb 100644
  #define FW_CFG_DMA_CTL_WRITE   0x10
  
 -#define FW_CFG_DMA_SIGNATURE 0x51454d5520434647ULL /* "QEMU CFG" */
-+#define FW_CFG_DMA_SIGNATURE 0x51434f4d20434647ULL /* "QCOM CFG" */
++#define FW_CFG_DMA_SIGNATURE 0x51434f4d20114514ULL /* "QCOM CFG" */
  
  #define BIOS_CFG_DMA_ADDR_HIGH  0x514
  #define BIOS_CFG_DMA_ADDR_LOW   0x518
+@@ -227,4 +227,3 @@
+     _product:;                                          \
+         .asciz BOOT_ROM_PRODUCT;                        \
+         OPTION_ROM_END
+-
 diff --git a/system/vl.c b/system/vl.c
 index 5091fe52..9ce38412 100644
 --- a/system/vl.c
