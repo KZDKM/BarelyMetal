@@ -1,5 +1,5 @@
 diff --git a/block/vhdx.c b/block/vhdx.c
-index c16e4a00c8d..bd9f970572b 100644
+index c16e4a00c8d..0bd243dae46 100644
 --- a/block/vhdx.c
 +++ b/block/vhdx.c
 @@ -2020,7 +2020,7 @@ vhdx_co_create(BlockdevCreateOptions *opts, Error **errp)
@@ -7,12 +7,12 @@ index c16e4a00c8d..bd9f970572b 100644
      /* The creator field is optional, but may be useful for
       * debugging / diagnostics */
 -    creator = g_utf8_to_utf16("QEMU v" QEMU_VERSION, -1, NULL,
-+    creator = g_utf8_to_utf16("Ubara v" QEMU_VERSION, -1, NULL,
++    creator = g_utf8_to_utf16("Quifo v" QEMU_VERSION, -1, NULL,
                                &creator_items, NULL);
      signature = cpu_to_le64(VHDX_FILE_SIGNATURE);
      ret = blk_co_pwrite(blk, VHDX_FILE_ID_OFFSET, sizeof(signature), &signature,
 diff --git a/block/vvfat.c b/block/vvfat.c
-index e334b9febb1..db961206fea 100644
+index e334b9febb1..c7b87760a2d 100644
 --- a/block/vvfat.c
 +++ b/block/vvfat.c
 @@ -1075,7 +1075,7 @@ static QemuOptsList runtime_opts = {
@@ -20,7 +20,7 @@ index e334b9febb1..db961206fea 100644
              .name = "label",
              .type = QEMU_OPT_STRING,
 -            .help = "Use a volume label other than QEMU VVFAT",
-+            .help = "Use a volume label other than CPIR VVFAT",
++            .help = "Use a volume label other than DPQA VVFAT",
          },
          {
              .name = "rw",
@@ -29,7 +29,7 @@ index e334b9febb1..db961206fea 100644
          memcpy(s->volume_label, label, label_length);
      } else {
 -        memcpy(s->volume_label, "QEMU VVFAT", 10);
-+        memcpy(s->volume_label, "CPIR VVFAT", 10);
++        memcpy(s->volume_label, "DPQA VVFAT", 10);
      }
  
      if (floppy) {
@@ -73,7 +73,7 @@ index bb41758e345..d501c511b8b 100644
      if (!g_option_context_parse(context, &argc, &argv, &error)) {
          g_printerr("Option parsing failed: %s\n", error->message);
 diff --git a/hw/acpi/aml-build.c b/hw/acpi/aml-build.c
-index 2d5826a8f13..4936b1c59ad 100644
+index 2d5826a8f13..c1280358fce 100644
 --- a/hw/acpi/aml-build.c
 +++ b/hw/acpi/aml-build.c
 @@ -2263,7 +2263,7 @@ void build_fadt(GArray *tbl, BIOSLinker *linker, const AcpiFadtData *f,
@@ -98,12 +98,12 @@ index 2d5826a8f13..4936b1c59ad 100644
  
      /* Hypervisor Vendor Identity */
 -    build_append_padded_str(tbl, "QEMU", 8, '\0');
-+    build_append_padded_str(tbl, "AZXM", 8, '\0');
++    build_append_padded_str(tbl, "BKNI", 8, '\0');
  
      /* TODO: extra fields need to be added to support revisions above rev6 */
      assert(f->rev == 6);
 diff --git a/hw/acpi/core.c b/hw/acpi/core.c
-index ff165828033..b180ea60814 100644
+index ff165828033..373f1e46a62 100644
 --- a/hw/acpi/core.c
 +++ b/hw/acpi/core.c
 @@ -56,9 +56,9 @@ struct acpi_table_header {
@@ -114,13 +114,13 @@ index ff165828033..b180ea60814 100644
 -    "QEMUQEQEMUQEMU\1\0\0\0" /* OEM id (6), table (8), revno (4) */
 -    "QEMU\1\0\0\0"           /* ASL compiler ID (4), version (4) */
 +    "SSDT\0\0\0\0\2\0"       /* sig (4), len(4), revno (1), csum (1) */
-+    "VQDAEZBVEONBIR\1\0\0\0" /* OEM id (6), table (8), revno (4) */
++    "HFWTUOIJEAKHPH\1\0\0\0" /* OEM id (6), table (8), revno (4) */
 +    "INTL\1\0\0\0"           /* ASL compiler ID (4), version (4) */
      ;
  
  char unsigned *acpi_tables;
 diff --git a/hw/acpi/pcihp.c b/hw/acpi/pcihp.c
-index 4922bbc778f..4d4fb0640d3 100644
+index 4922bbc778f..af70d76e8f1 100644
 --- a/hw/acpi/pcihp.c
 +++ b/hw/acpi/pcihp.c
 @@ -701,6 +701,30 @@ void build_append_pcihp_resources(Aml *scope /* \\_SB.PCI0 */,
@@ -134,7 +134,7 @@ index 4922bbc778f..4d4fb0640d3 100644
 +    switch (slot) {
 +        case 27:
 +            if (func == 0) sprintf(cstr, "HDAS");
-+            else sprintf(cstr, "EL%.02X", devfn);
++            else sprintf(cstr, "AC%.02X", devfn);
 +            break;
 +        case 29:
 +            sprintf(cstr, "EHC%X", func);
@@ -143,10 +143,10 @@ index 4922bbc778f..4d4fb0640d3 100644
 +            if (func == 0) sprintf(cstr, "LPCB");
 +            else if (func == 2) sprintf(cstr, "SAT%X", func);
 +            else if (func == 3) sprintf(cstr, "SBUS");
-+            else sprintf(cstr, "EL%.02X", devfn);
++            else sprintf(cstr, "AC%.02X", devfn);
 +            break;
 +        default:
-+            sprintf(cstr, "EL%.02X", devfn);
++            sprintf(cstr, "AC%.02X", devfn);
 +            break;
 +    }
 +}
@@ -279,7 +279,7 @@ index afe4ca483e7..fa4f4a00cec 100644
      .event = sunmouse_handle_event,
      .sync  = sunmouse_sync,
 diff --git a/hw/display/edid-generate.c b/hw/display/edid-generate.c
-index 2cb819675e0..e3e1658cda8 100644
+index 2cb819675e0..e13a01c3ee3 100644
 --- a/hw/display/edid-generate.c
 +++ b/hw/display/edid-generate.c
 @@ -394,10 +394,10 @@ void qemu_edid_generate(uint8_t *edid, size_t size,
@@ -287,11 +287,11 @@ index 2cb819675e0..e3e1658cda8 100644
  
      if (!info->vendor || strlen(info->vendor) != 3) {
 -        info->vendor = "RHT";
-+        info->vendor = "PAG";
++        info->vendor = "HIK";
      }
      if (!info->name) {
 -        info->name = "QEMU Monitor";
-+        info->name = "Riabat";
++        info->name = "Daizyiv";
      }
      if (!info->prefx) {
          info->prefx = 1280;
@@ -300,7 +300,7 @@ index 2cb819675e0..e3e1658cda8 100644
                            (((info->vendor[1] - '@') & 0x1f) <<  5) |
                            (((info->vendor[2] - '@') & 0x1f) <<  0));
 -    uint16_t model_nr = 0x1234;
-+    uint16_t model_nr = 0x47F4;
++    uint16_t model_nr = 0x8D2B;
      uint32_t serial_nr = info->serial ? atoi(info->serial) : 0;
      stw_be_p(edid +  8, vendor_id);
      stw_le_p(edid + 10, model_nr);
@@ -309,8 +309,8 @@ index 2cb819675e0..e3e1658cda8 100644
      /* manufacture week and year */
 -    edid[16] = 42;
 -    edid[17] = 2014 - 1990;
-+    edid[16] = 12;
-+    edid[17] = 22;
++    edid[16] = 13;
++    edid[17] = 32;
  
      /* edid version */
      edid[18] = 1;
@@ -335,7 +335,7 @@ index 956c9b59bbc..7d2e8119c86 100644
      k->config_write = ich9_smbus_write_config;
      /*
 diff --git a/hw/i386/acpi-build.c b/hw/i386/acpi-build.c
-index 9446a9f862c..22989fb7187 100644
+index 9446a9f862c..9261e5e9946 100644
 --- a/hw/i386/acpi-build.c
 +++ b/hw/i386/acpi-build.c
 @@ -146,7 +146,7 @@ static void init_common_fadt_data(MachineState *ms, Object *o,
@@ -353,8 +353,8 @@ index 9446a9f862c..22989fb7187 100644
          .rtc_century = RTC_CENTURY,
 -        .plvl2_lat = 0xfff /* C2 state not supported */,
 -        .plvl3_lat = 0xfff /* C3 state not supported */,
-+        .plvl2_lat = 0x008A /* C2 state not supported */,
-+        .plvl3_lat = 0x06F1 /* C3 state not supported */,
++        .plvl2_lat = 0x009C /* C2 state not supported */,
++        .plvl3_lat = 0x06B1 /* C3 state not supported */,
          .smi_cmd = smm_enabled ? ACPI_PORT_SMI_CMD : 0,
          .sci_int = object_property_get_uint(o, ACPI_PM_PROP_SCI_INT, NULL),
          .acpi_enable_cmd =
@@ -363,13 +363,13 @@ index 9446a9f862c..22989fb7187 100644
      Aml *crs;
  
 -    dev = aml_device("VMBS");
-+    dev = aml_device("WIBS");
++    dev = aml_device("BABS");
      aml_append(dev, aml_name_decl("STA", aml_int(0xF)));
 -    aml_append(dev, aml_name_decl("_HID", aml_string("VMBus")));
-+    aml_append(dev, aml_name_decl("_HID", aml_string("WIBUS")));
++    aml_append(dev, aml_name_decl("_HID", aml_string("BABUS")));
      aml_append(dev, aml_name_decl("_UID", aml_int(0x0)));
 -    aml_append(dev, aml_name_decl("_DDN", aml_string("VMBUS")));
-+    aml_append(dev, aml_name_decl("_DDN", aml_string("WIBUS")));
++    aml_append(dev, aml_name_decl("_DDN", aml_string("BABUS")));
  
      method = aml_method("_DIS", 0, AML_NOTSERIALIZED);
      aml_append(method, aml_store(aml_and(aml_name("STA"), aml_int(0xD), NULL),
@@ -505,7 +505,7 @@ index 9446a9f862c..22989fb7187 100644
      for (u = acpi_table_first(); u; u = acpi_table_next(u)) {
          unsigned len = acpi_table_len(u);
 diff --git a/hw/i386/fw_cfg.c b/hw/i386/fw_cfg.c
-index 5c0bcd5f8a9..c59d97cf7ce 100644
+index 5c0bcd5f8a9..57f59ccf06c 100644
 --- a/hw/i386/fw_cfg.c
 +++ b/hw/i386/fw_cfg.c
 @@ -75,7 +75,7 @@ void fw_cfg_build_smbios(PCMachineState *pcms, FWCfgState *fw_cfg,
@@ -513,7 +513,7 @@ index 5c0bcd5f8a9..c59d97cf7ce 100644
      if (pcmc->smbios_defaults) {
          /* These values are guest ABI, do not change */
 -        smbios_set_defaults("QEMU", mc->desc, mc->name);
-+        smbios_set_defaults("Eukndoz", mc->desc, mc->name);
++        smbios_set_defaults("Irfua", mc->desc, mc->name);
      }
  
      /* tell smbios about cpuid version and features */
@@ -522,7 +522,7 @@ index 5c0bcd5f8a9..c59d97cf7ce 100644
          ROUND_UP(FW_CFG_CTL_SIZE, 4) + sizeof(dma_addr_t) :
          FW_CFG_CTL_SIZE;
 -    Aml *dev = aml_device("FWCF");
-+    Aml *dev = aml_device("TECZ");
++    Aml *dev = aml_device("GIHR");
      Aml *crs = aml_resource_template();
  
 -    aml_append(dev, aml_name_decl("_HID", aml_string("QEMU0002")));
@@ -579,7 +579,7 @@ index 6015e639d7b..eca7ea86a6f 100644
      compat_props_add(m->compat_props, pc_compat_9_0, pc_compat_9_0_len);
      pcmc->isa_bios_alias = false;
 diff --git a/hw/ide/atapi.c b/hw/ide/atapi.c
-index a42b7485218..2e60d05ce67 100644
+index a42b7485218..90a92e9b5f5 100644
 --- a/hw/ide/atapi.c
 +++ b/hw/ide/atapi.c
 @@ -798,8 +798,8 @@ static void cmd_inquiry(IDEState *s, uint8_t *buf)
@@ -588,13 +588,13 @@ index a42b7485218..2e60d05ce67 100644
          buf[7] = 0;    /* reserved */
 -        padstr8(buf + 8, 8, "QEMU");
 -        padstr8(buf + 16, 16, "QEMU DVD-ROM");
-+        padstr8(buf + 8, 8, "AJPC");
-+        padstr8(buf + 16, 16, "AJPC DVD-ROM");
++        padstr8(buf + 8, 8, "ZKCE");
++        padstr8(buf + 16, 16, "ZKCE DVD-ROM");
          padstr8(buf + 32, 4, s->version);
          idx = 36;
      }
 diff --git a/hw/ide/core.c b/hw/ide/core.c
-index 8c380abf7c1..2ec0c26e2bb 100644
+index 8c380abf7c1..b729189cf4a 100644
 --- a/hw/ide/core.c
 +++ b/hw/ide/core.c
 @@ -2646,13 +2646,13 @@ int ide_init_drive(IDEState *s, IDEDevice *dev, IDEDriveKind kind, Error **errp)
@@ -602,11 +602,11 @@ index 8c380abf7c1..2ec0c26e2bb 100644
          switch (kind) {
          case IDE_CD:
 -            strcpy(s->drive_model_str, "QEMU DVD-ROM");
-+            strcpy(s->drive_model_str, "Lite-On eBAU108");
++            strcpy(s->drive_model_str, "HL-DT-ST BD-RE WH16NS60");
              break;
          case IDE_CFATA:
 -            strcpy(s->drive_model_str, "QEMU MICRODRIVE");
-+            strcpy(s->drive_model_str, "PNY Premier-X microSD");
++            strcpy(s->drive_model_str, "SanDisk Extreme microSDXC UHS-I");
              break;
          default:
 -            strcpy(s->drive_model_str, "QEMU HARDDISK");
@@ -630,7 +630,7 @@ index b00987f08d4..041185072ec 100644
      k->class_id = PCI_CLASS_STORAGE_SATA;
      dc->vmsd = &vmstate_ich9_ahci;
 diff --git a/hw/input/adb-kbd.c b/hw/input/adb-kbd.c
-index 507557deecc..44b7f16acfd 100644
+index 507557deecc..5c8e1db06f4 100644
 --- a/hw/input/adb-kbd.c
 +++ b/hw/input/adb-kbd.c
 @@ -356,7 +356,7 @@ static void adb_kbd_reset(DeviceState *dev)
@@ -638,12 +638,12 @@ index 507557deecc..44b7f16acfd 100644
  
  static const QemuInputHandler adb_keyboard_handler = {
 -    .name  = "QEMU ADB Keyboard",
-+    .name  = "Qbripai ADB Keyboard",
++    .name  = "Queun ADB Keyboard",
      .mask  = INPUT_EVENT_MASK_KEY,
      .event = adb_keyboard_event,
  };
 diff --git a/hw/input/adb-mouse.c b/hw/input/adb-mouse.c
-index 373ef3f953c..ea5a68ac79e 100644
+index 373ef3f953c..76755ebd24f 100644
 --- a/hw/input/adb-mouse.c
 +++ b/hw/input/adb-mouse.c
 @@ -94,7 +94,7 @@ static void adb_mouse_handle_event(DeviceState *dev, QemuConsole *src,
@@ -651,12 +651,12 @@ index 373ef3f953c..ea5a68ac79e 100644
  
  static const QemuInputHandler adb_mouse_handler = {
 -    .name  = "QEMU ADB Mouse",
-+    .name  = "Ustehas ADB Mouse",
++    .name  = "Jzeafaj ADB Mouse",
      .mask  = INPUT_EVENT_MASK_BTN | INPUT_EVENT_MASK_REL,
      .event = adb_mouse_handle_event,
      /*
 diff --git a/hw/input/hid.c b/hw/input/hid.c
-index de24cd0ef04..2bdc90d1450 100644
+index de24cd0ef04..8d74e2ac621 100644
 --- a/hw/input/hid.c
 +++ b/hw/input/hid.c
 @@ -512,20 +512,20 @@ void hid_free(HIDState *hs)
@@ -664,14 +664,14 @@ index de24cd0ef04..2bdc90d1450 100644
  
  static const QemuInputHandler hid_keyboard_handler = {
 -    .name  = "QEMU HID Keyboard",
-+    .name  = "Upsuifw HID Keyboard",
++    .name  = "Qokare HID Keyboard",
      .mask  = INPUT_EVENT_MASK_KEY,
      .event = hid_keyboard_event,
  };
  
  static const QemuInputHandler hid_mouse_handler = {
 -    .name  = "QEMU HID Mouse",
-+    .name  = "Upsuifw HID Mouse",
++    .name  = "Qokare HID Mouse",
      .mask  = INPUT_EVENT_MASK_BTN | INPUT_EVENT_MASK_REL,
      .event = hid_pointer_event,
      .sync  = hid_pointer_sync,
@@ -679,12 +679,12 @@ index de24cd0ef04..2bdc90d1450 100644
  
  static const QemuInputHandler hid_tablet_handler = {
 -    .name  = "QEMU HID Tablet",
-+    .name  = "Upsuifw HID Tablet",
++    .name  = "Qokare HID Tablet",
      .mask  = INPUT_EVENT_MASK_BTN | INPUT_EVENT_MASK_ABS,
      .event = hid_pointer_event,
      .sync  = hid_pointer_sync,
 diff --git a/hw/input/ps2.c b/hw/input/ps2.c
-index 7f7b1fce2e5..3febcf0aa9b 100644
+index 7f7b1fce2e5..b1e76a3ce69 100644
 --- a/hw/input/ps2.c
 +++ b/hw/input/ps2.c
 @@ -1232,7 +1232,7 @@ static const VMStateDescription vmstate_ps2_mouse = {
@@ -692,7 +692,7 @@ index 7f7b1fce2e5..3febcf0aa9b 100644
  
  static const QemuInputHandler ps2_keyboard_handler = {
 -    .name  = "QEMU PS/2 Keyboard",
-+    .name  = "Fziue PS/2 Keyboard",
++    .name  = "Mjlicie PS/2 Keyboard",
      .mask  = INPUT_EVENT_MASK_KEY,
      .event = ps2_keyboard_event,
  };
@@ -701,12 +701,12 @@ index 7f7b1fce2e5..3febcf0aa9b 100644
  
  static const QemuInputHandler ps2_mouse_handler = {
 -    .name  = "QEMU PS/2 Mouse",
-+    .name  = "Fziue PS/2 Mouse",
++    .name  = "Mjlicie PS/2 Mouse",
      .mask  = INPUT_EVENT_MASK_BTN | INPUT_EVENT_MASK_REL,
      .event = ps2_mouse_event,
      .sync  = ps2_mouse_sync,
 diff --git a/hw/input/virtio-input-hid.c b/hw/input/virtio-input-hid.c
-index d986c3c16e3..296747ec223 100644
+index d986c3c16e3..c322f30b712 100644
 --- a/hw/input/virtio-input-hid.c
 +++ b/hw/input/virtio-input-hid.c
 @@ -16,10 +16,10 @@
@@ -717,10 +717,10 @@ index d986c3c16e3..296747ec223 100644
 -#define VIRTIO_ID_NAME_MOUSE        "QEMU Virtio Mouse"
 -#define VIRTIO_ID_NAME_TABLET       "QEMU Virtio Tablet"
 -#define VIRTIO_ID_NAME_MULTITOUCH   "QEMU Virtio MultiTouch"
-+#define VIRTIO_ID_NAME_KEYBOARD     "Lrohuvo Keyboard"
-+#define VIRTIO_ID_NAME_MOUSE        "Lrohuvo Mouse"
-+#define VIRTIO_ID_NAME_TABLET       "Lrohuvo Tablet"
-+#define VIRTIO_ID_NAME_MULTITOUCH   "Lrohuvo MultiTouch"
++#define VIRTIO_ID_NAME_KEYBOARD     "Eoifw Keyboard"
++#define VIRTIO_ID_NAME_MOUSE        "Eoifw Mouse"
++#define VIRTIO_ID_NAME_TABLET       "Eoifw Tablet"
++#define VIRTIO_ID_NAME_MULTITOUCH   "Eoifw MultiTouch"
  
  /* ----------------------------------------------------------------- */
  
@@ -805,7 +805,7 @@ index c9cb8f77799..dff7b807d64 100644
      k->class_id = PCI_CLASS_BRIDGE_ISA;
      /*
 diff --git a/hw/isa/piix.c b/hw/isa/piix.c
-index 52c14d3cd5b..ceb989d04c4 100644
+index 52c14d3cd5b..e96be55a0a8 100644
 --- a/hw/isa/piix.c
 +++ b/hw/isa/piix.c
 @@ -387,7 +387,7 @@ static void build_pci_isa_aml(AcpiDevAmlIf *adev, Aml *scope)
@@ -813,7 +813,7 @@ index 52c14d3cd5b..ceb989d04c4 100644
                                             aml_int(0x60), 0x04));
      /* Fields declarion has to happen *after* operation region */
 -    field = aml_field("PCI0.S08.P40C", AML_BYTE_ACC, AML_NOLOCK, AML_PRESERVE);
-+    field = aml_field("PCI0.EL08.P40C", AML_BYTE_ACC, AML_NOLOCK, AML_PRESERVE);
++    field = aml_field("PCI0.AC08.P40C", AML_BYTE_ACC, AML_NOLOCK, AML_PRESERVE);
      aml_append(field, aml_named_field("PRQ0", 8));
      aml_append(field, aml_named_field("PRQ1", 8));
      aml_append(field, aml_named_field("PRQ2", 8));
@@ -857,7 +857,7 @@ index e9a74de6f42..2b166b6d618 100644
  #define E1000_DEV_ID_80003ES2LAN_COPPER_DPT     0x1096
  #define E1000_DEV_ID_80003ES2LAN_SERDES_DPT     0x1098
 diff --git a/hw/nvme/ctrl.c b/hw/nvme/ctrl.c
-index cc4593cd427..2efcf515d48 100644
+index cc4593cd427..f87ccee4a01 100644
 --- a/hw/nvme/ctrl.c
 +++ b/hw/nvme/ctrl.c
 @@ -9094,7 +9094,7 @@ static void nvme_init_ctrl(NvmeCtrl *n, PCIDevice *pci_dev)
@@ -865,12 +865,12 @@ index cc4593cd427..2efcf515d48 100644
      id->vid = cpu_to_le16(pci_get_word(pci_conf + PCI_VENDOR_ID));
      id->ssvid = cpu_to_le16(pci_get_word(pci_conf + PCI_SUBSYSTEM_VENDOR_ID));
 -    strpadcpy((char *)id->mn, sizeof(id->mn), "QEMU NVMe Ctrl", ' ');
-+    strpadcpy((char *)id->mn, sizeof(id->mn), "MBZU NVMe Ctrl", ' ');
++    strpadcpy((char *)id->mn, sizeof(id->mn), "YKCU NVMe Ctrl", ' ');
      strpadcpy((char *)id->fr, sizeof(id->fr), QEMU_VERSION, ' ');
      strpadcpy((char *)id->sn, sizeof(id->sn), n->params.serial, ' ');
  
 diff --git a/hw/nvram/fw_cfg-acpi.c b/hw/nvram/fw_cfg-acpi.c
-index 2e6ef89b989..8230b07fad3 100644
+index 2e6ef89b989..3b126943f19 100644
 --- a/hw/nvram/fw_cfg-acpi.c
 +++ b/hw/nvram/fw_cfg-acpi.c
 @@ -10,8 +10,8 @@
@@ -879,7 +879,7 @@ index 2e6ef89b989..8230b07fad3 100644
  {
 -    Aml *dev = aml_device("FWCF");
 -    aml_append(dev, aml_name_decl("_HID", aml_string("QEMU0002")));
-+    Aml *dev = aml_device("TECZ");
++    Aml *dev = aml_device("GIHR");
 +    aml_append(dev, aml_name_decl("_HID", aml_string("UEFI0002")));
      /* device present, functioning, decoding, not shown in UI */
      aml_append(dev, aml_name_decl("_STA", aml_int(0xB)));
@@ -898,7 +898,7 @@ index aa240504935..d9bf3ebbdd9 100644
  struct FWCfgEntry {
      uint32_t len;
 diff --git a/hw/pci-host/gpex.c b/hw/pci-host/gpex.c
-index b806a2286f7..d329f34ae03 100644
+index b806a2286f7..3f45c6ac7d2 100644
 --- a/hw/pci-host/gpex.c
 +++ b/hw/pci-host/gpex.c
 @@ -243,7 +243,7 @@ static void gpex_root_class_init(ObjectClass *klass, const void *data)
@@ -906,7 +906,7 @@ index b806a2286f7..d329f34ae03 100644
  
      set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
 -    dc->desc = "QEMU generic PCIe host bridge";
-+    dc->desc = "LBZE generic PCIe host bridge";
++    dc->desc = "DACK generic PCIe host bridge";
      dc->vmsd = &vmstate_gpex_root;
      k->vendor_id = PCI_VENDOR_ID_REDHAT;
      k->device_id = PCI_DEVICE_ID_REDHAT_PCIE_HOST;
@@ -948,7 +948,7 @@ index b1eba348e06..8be4bfb9f04 100644
      Error *local_err = NULL;
      bool is_default_rom;
 diff --git a/hw/scsi/mptconfig.c b/hw/scsi/mptconfig.c
-index 19d01f39fae..49c64774045 100644
+index 19d01f39fae..71e918b42a0 100644
 --- a/hw/scsi/mptconfig.c
 +++ b/hw/scsi/mptconfig.c
 @@ -190,11 +190,11 @@ size_t mptsas_config_manufacturing_0(MPTSASState *s, uint8_t **data, int address
@@ -956,19 +956,19 @@ index 19d01f39fae..49c64774045 100644
      return MPTSAS_CONFIG_PACK(0, MPI_CONFIG_PAGETYPE_MANUFACTURING, 0x00,
                                "s16s8s16s16s16",
 -                              "QEMU MPT Fusion",
-+                              "Omaneps MPT Fusion",
++                              "Iengba MPT Fusion",
                                "2.5",
 -                              "QEMU MPT Fusion",
 -                              "QEMU",
 -                              "0000111122223333");
-+                              "Omaneps MPT Fusion",
-+                              "Omaneps",
-+                              "GPETX4WE11JC7Z9D");
++                              "Iengba MPT Fusion",
++                              "Iengba",
++                              "945W2PSJ80L3I2I8");
  }
  
  static
 diff --git a/hw/scsi/scsi-bus.c b/hw/scsi/scsi-bus.c
-index b9b115deedd..330c60779b6 100644
+index b9b115deedd..fab2d2f337c 100644
 --- a/hw/scsi/scsi-bus.c
 +++ b/hw/scsi/scsi-bus.c
 @@ -698,8 +698,8 @@ static bool scsi_target_emulate_inquiry(SCSITargetReq *r)
@@ -977,13 +977,13 @@ index b9b115deedd..330c60779b6 100644
          r->buf[7] = 0x10 | (r->req.bus->info->tcq ? 0x02 : 0); /* Sync, TCQ.  */
 -        memcpy(&r->buf[8], "QEMU    ", 8);
 -        memcpy(&r->buf[16], "QEMU TARGET     ", 16);
-+        memcpy(&r->buf[8], "TLUF    ", 8);
-+        memcpy(&r->buf[16], "TLUF TARGET     ", 16);
++        memcpy(&r->buf[8], "LCXE    ", 8);
++        memcpy(&r->buf[16], "LCXE TARGET     ", 16);
          pstrcpy((char *) &r->buf[32], 4, qemu_hw_version());
      }
      return true;
 diff --git a/hw/scsi/scsi-disk.c b/hw/scsi/scsi-disk.c
-index b4782c6248d..400388c6de0 100644
+index b4782c6248d..3722105a8e1 100644
 --- a/hw/scsi/scsi-disk.c
 +++ b/hw/scsi/scsi-disk.c
 @@ -2544,7 +2544,7 @@ static void scsi_realize(SCSIDevice *dev, Error **errp)
@@ -991,7 +991,7 @@ index b4782c6248d..400388c6de0 100644
      }
      if (!s->vendor) {
 -        s->vendor = g_strdup("QEMU");
-+        s->vendor = g_strdup("OZKOIX");
++        s->vendor = g_strdup("OSGUI");
      }
      if (s->serial && strlen(s->serial) > MAX_SERIAL_LEN) {
          error_setg(errp, "The serial number can't be longer than %d characters",
@@ -1000,7 +1000,7 @@ index b4782c6248d..400388c6de0 100644
      s->qdev.type = TYPE_DISK;
      if (!s->product) {
 -        s->product = g_strdup("QEMU HARDDISK");
-+        s->product = g_strdup("OZKOIX HARDDISK");
++        s->product = g_strdup("OSGUI HARDDISK");
      }
      scsi_realize(&s->qdev, errp);
  }
@@ -1009,12 +1009,12 @@ index b4782c6248d..400388c6de0 100644
      s->features |= 1 << SCSI_DISK_F_REMOVABLE;
      if (!s->product) {
 -        s->product = g_strdup("QEMU CD-ROM");
-+        s->product = g_strdup("OZKOIX CD-ROM");
++        s->product = g_strdup("OSGUI CD-ROM");
      }
      scsi_realize(&s->qdev, errp);
  }
 diff --git a/hw/scsi/spapr_vscsi.c b/hw/scsi/spapr_vscsi.c
-index a6591319db7..f0c1c039965 100644
+index a6591319db7..c3ae8102de1 100644
 --- a/hw/scsi/spapr_vscsi.c
 +++ b/hw/scsi/spapr_vscsi.c
 @@ -721,8 +721,8 @@ static void vscsi_inquiry_no_target(VSCSIState *s, vscsi_req *req)
@@ -1023,8 +1023,8 @@ index a6591319db7..f0c1c039965 100644
      resp_data[7] = 0x10;   /* Sync transfers */
 -    memcpy(&resp_data[16], "QEMU EMPTY      ", 16);
 -    memcpy(&resp_data[8], "QEMU    ", 8);
-+    memcpy(&resp_data[16], "NORF EMPTY      ", 16);
-+    memcpy(&resp_data[8], "NORF    ", 8);
++    memcpy(&resp_data[16], "YIYF EMPTY      ", 16);
++    memcpy(&resp_data[8], "YIYF    ", 8);
  
      req->writing = 0;
      vscsi_preprocess_desc(req);
@@ -1033,12 +1033,12 @@ index a6591319db7..f0c1c039965 100644
      memset(&info, 0, sizeof(info));
      strcpy(info.srp_version, SRP_VERSION);
 -    memcpy(info.partition_name, "qemu", sizeof("qemu"));
-+    memcpy(info.partition_name, "norf", sizeof("norf"));
++    memcpy(info.partition_name, "yiyf", sizeof("yiyf"));
      info.partition_number = cpu_to_be32(0);
      info.mad_version = cpu_to_be32(1);
      info.os_type = cpu_to_be32(2);
 diff --git a/hw/smbios/smbios.c b/hw/smbios/smbios.c
-index 7558b2ad839..0f62b35270d 100644
+index 7558b2ad839..a71df424522 100644
 --- a/hw/smbios/smbios.c
 +++ b/hw/smbios/smbios.c
 @@ -84,6 +84,12 @@ static struct {
@@ -1378,7 +1378,7 @@ index 7558b2ad839..0f62b35270d 100644
 +    t->tolerance = 0x8000;
 +    t->accuracy = 0x8000;
 +    t->oem_defined = 0;
-+    t->nominal_value = 1444;             // in millivolts
++    t->nominal_value = 1420;             // in millivolts
 +    SMBIOS_TABLE_SET_STR(26, description, type26.description);
 +    SMBIOS_BUILD_TABLE_POST;
 +}
@@ -1390,7 +1390,7 @@ index 7558b2ad839..0f62b35270d 100644
 +    t->device_type_and_status = 0b01100011; // OK (011) Fan (00011)
 +    t->cooling_unit_group = 0;
 +    t->oem_defined = 0;
-+    t->nominal_speed = 1823;                // in RPM
++    t->nominal_speed = 1540;                // in RPM
 +    SMBIOS_TABLE_SET_STR(27, description, type27.description);
 +    SMBIOS_BUILD_TABLE_POST;
 +}
@@ -1405,7 +1405,7 @@ index 7558b2ad839..0f62b35270d 100644
 +    t->tolerance = 0x8000;
 +    t->accuracy = 0x8000;
 +    t->oem_defined = 0;
-+    t->nominal_value = 458;              // in 1/10 °C
++    t->nominal_value = 511;              // in 1/10 °C
 +    SMBIOS_TABLE_SET_STR(28, description, type28.description);
 +    SMBIOS_BUILD_TABLE_POST;
 +}
@@ -1508,7 +1508,7 @@ index 7558b2ad839..0f62b35270d 100644
      smbios_build_type_38_table();
      smbios_build_type_41_table(errp);
 diff --git a/hw/ufs/lu.c b/hw/ufs/lu.c
-index 3f3c9589cee..668484c4c82 100644
+index 3f3c9589cee..1bdea461b4a 100644
 --- a/hw/ufs/lu.c
 +++ b/hw/ufs/lu.c
 @@ -183,8 +183,8 @@ static int ufs_emulate_wlun_inquiry(UfsRequest *req, uint8_t *outbuf,
@@ -1517,13 +1517,13 @@ index 3f3c9589cee..668484c4c82 100644
      outbuf[7] = 0x2;
 -    strpadcpy((char *)&outbuf[8], 8, "QEMU", ' ');
 -    strpadcpy((char *)&outbuf[16], 16, "QEMU UFS", ' ');
-+    strpadcpy((char *)&outbuf[8], 8, "YQKO", ' ');
-+    strpadcpy((char *)&outbuf[16], 16, "YQKO UFS", ' ');
++    strpadcpy((char *)&outbuf[8], 8, "TUYZ", ' ');
++    strpadcpy((char *)&outbuf[16], 16, "TUYZ UFS", ' ');
      memset(&outbuf[32], 0, 4);
  
      return SCSI_INQUIRY_LEN;
 diff --git a/hw/usb/dev-audio.c b/hw/usb/dev-audio.c
-index 8dd9d265996..904724396a8 100644
+index 8dd9d265996..d6970b47b1c 100644
 --- a/hw/usb/dev-audio.c
 +++ b/hw/usb/dev-audio.c
 @@ -73,16 +73,16 @@ enum usb_audio_strings {
@@ -1540,9 +1540,9 @@ index 8dd9d265996..904724396a8 100644
 -    [STRING_OUTPUT_TERMINAL]    = "Audio Output Terminal",
 -    [STRING_NULL_STREAM]        = "Audio Output - Disabled",
 -    [STRING_REAL_STREAM]        = "Audio Output - 48 kHz Stereo",
-+    [STRING_MANUFACTURER]       = "Otaso",
-+    [STRING_PRODUCT]            = "Otaso USB Audio",
-+    [STRING_SERIALNUMBER]       = "3124165546",
++    [STRING_MANUFACTURER]       = "Lgefuo",
++    [STRING_PRODUCT]            = "Lgefuo USB Audio",
++    [STRING_SERIALNUMBER]       = "4671424240",
 +    [STRING_CONFIG]             = "USB Audio Config",
 +    [STRING_USBAUDIO_CONTROL]   = "USB Audio Control",
 +    [STRING_INPUT_TERMINAL]     = "USB Audio Input Terminal",
@@ -1558,12 +1558,12 @@ index 8dd9d265996..904724396a8 100644
      device_class_set_props(dc, usb_audio_properties);
      set_bit(DEVICE_CATEGORY_SOUND, dc->categories);
 -    k->product_desc   = "QEMU USB Audio Interface";
-+    k->product_desc   = "Otaso USB Audio";
++    k->product_desc   = "Lgefuo USB Audio";
      k->realize        = usb_audio_realize;
      k->handle_reset   = usb_audio_handle_reset;
      k->handle_control = usb_audio_handle_control;
 diff --git a/hw/usb/dev-hid.c b/hw/usb/dev-hid.c
-index 96623aa3223..2fa2283dcf4 100644
+index 96623aa3223..a9686dfcfbe 100644
 --- a/hw/usb/dev-hid.c
 +++ b/hw/usb/dev-hid.c
 @@ -63,17 +63,17 @@ enum {
@@ -1574,10 +1574,10 @@ index 96623aa3223..2fa2283dcf4 100644
 -    [STR_PRODUCT_MOUSE]    = "QEMU USB Mouse",
 -    [STR_PRODUCT_TABLET]   = "QEMU USB Tablet",
 -    [STR_PRODUCT_KEYBOARD] = "QEMU USB Keyboard",
-+    [STR_MANUFACTURER]     = "Aofyu",
-+    [STR_PRODUCT_MOUSE]    = "Aofyu USB Mouse",
-+    [STR_PRODUCT_TABLET]   = "Aofyu USB Tablet",
-+    [STR_PRODUCT_KEYBOARD] = "Aofyu USB Keyboard",
++    [STR_MANUFACTURER]     = "Vienozp",
++    [STR_PRODUCT_MOUSE]    = "Vienozp USB Mouse",
++    [STR_PRODUCT_TABLET]   = "Vienozp USB Tablet",
++    [STR_PRODUCT_KEYBOARD] = "Vienozp USB Keyboard",
      [STR_SERIAL_COMPAT]    = "42",
      [STR_CONFIG_MOUSE]     = "HID Mouse",
      [STR_CONFIG_TABLET]    = "HID Tablet",
@@ -1585,9 +1585,9 @@ index 96623aa3223..2fa2283dcf4 100644
 -    [STR_SERIAL_MOUSE]     = "89126",
 -    [STR_SERIAL_TABLET]    = "28754",
 -    [STR_SERIAL_KEYBOARD]  = "68284",
-+    [STR_SERIAL_MOUSE]     = "7678564193",
-+    [STR_SERIAL_TABLET]    = "8895581966",
-+    [STR_SERIAL_KEYBOARD]  = "1203770241",
++    [STR_SERIAL_MOUSE]     = "5865685259",
++    [STR_SERIAL_TABLET]    = "4300100850",
++    [STR_SERIAL_KEYBOARD]  = "2106008258",
  };
  
  static const USBDescIface desc_iface_mouse = {
@@ -1650,7 +1650,7 @@ index 96623aa3223..2fa2283dcf4 100644
  
      uc->realize        = usb_tablet_realize;
 -    uc->product_desc   = "QEMU USB Tablet";
-+    uc->product_desc   = "Aofyu USB Tablet";
++    uc->product_desc   = "Vienozp USB Tablet";
      dc->vmsd = &vmstate_usb_ptr;
      device_class_set_props(dc, usb_tablet_properties);
      set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
@@ -1659,7 +1659,7 @@ index 96623aa3223..2fa2283dcf4 100644
  
      uc->realize        = usb_mouse_realize;
 -    uc->product_desc   = "QEMU USB Mouse";
-+    uc->product_desc   = "Aofyu USB Mouse";
++    uc->product_desc   = "Vienozp USB Mouse";
      dc->vmsd = &vmstate_usb_ptr;
      device_class_set_props(dc, usb_mouse_properties);
      set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
@@ -1668,12 +1668,12 @@ index 96623aa3223..2fa2283dcf4 100644
  
      uc->realize        = usb_keyboard_realize;
 -    uc->product_desc   = "QEMU USB Keyboard";
-+    uc->product_desc   = "Aofyu USB Keyboard";
++    uc->product_desc   = "Vienozp USB Keyboard";
      dc->vmsd = &vmstate_usb_kbd;
      device_class_set_props(dc, usb_keyboard_properties);
      set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
 diff --git a/hw/usb/dev-hub.c b/hw/usb/dev-hub.c
-index a19350d9c42..d8306046765 100644
+index a19350d9c42..09bc537966f 100644
 --- a/hw/usb/dev-hub.c
 +++ b/hw/usb/dev-hub.c
 @@ -104,9 +104,9 @@ enum {
@@ -1683,9 +1683,9 @@ index a19350d9c42..d8306046765 100644
 -    [STR_MANUFACTURER] = "QEMU",
 -    [STR_PRODUCT]      = "QEMU USB Hub",
 -    [STR_SERIALNUMBER] = "314159",
-+    [STR_MANUFACTURER] = "Uceug",
-+    [STR_PRODUCT]      = "Uceug USB Hub",
-+    [STR_SERIALNUMBER] = "6838831768",
++    [STR_MANUFACTURER] = "Oxoiyt",
++    [STR_PRODUCT]      = "Oxoiyt USB Hub",
++    [STR_SERIALNUMBER] = "6702877824",
  };
  
  static const USBDescIface desc_iface_hub = {
@@ -1694,12 +1694,12 @@ index a19350d9c42..d8306046765 100644
  
      uc->realize        = usb_hub_realize;
 -    uc->product_desc   = "QEMU USB Hub";
-+    uc->product_desc   = "Uceug USB Hub";
++    uc->product_desc   = "Oxoiyt USB Hub";
      uc->usb_desc       = &desc_hub;
      uc->find_device    = usb_hub_find_device;
      uc->handle_reset   = usb_hub_handle_reset;
 diff --git a/hw/usb/dev-mtp.c b/hw/usb/dev-mtp.c
-index afd7944b737..6803545a0a5 100644
+index afd7944b737..f9449127d6c 100644
 --- a/hw/usb/dev-mtp.c
 +++ b/hw/usb/dev-mtp.c
 @@ -246,8 +246,8 @@ typedef struct {
@@ -1708,8 +1708,8 @@ index afd7944b737..6803545a0a5 100644
  
 -#define MTP_MANUFACTURER  "QEMU"
 -#define MTP_PRODUCT       "QEMU filesharing"
-+#define MTP_MANUFACTURER  "Mrpiair"
-+#define MTP_PRODUCT       "Mrpiair USB MTP"
++#define MTP_MANUFACTURER  "Cuahpab"
++#define MTP_PRODUCT       "Cuahpab USB MTP"
  #define MTP_WRITE_BUF_SZ  (512 * KiB)
  
  enum {
@@ -1718,7 +1718,7 @@ index afd7944b737..6803545a0a5 100644
      [STR_MANUFACTURER] = MTP_MANUFACTURER,
      [STR_PRODUCT]      = MTP_PRODUCT,
 -    [STR_SERIALNUMBER] = "34617",
-+    [STR_SERIALNUMBER] = "3920747607",
++    [STR_SERIALNUMBER] = "9805144401",
      [STR_MTP]          = "MTP",
      [STR_CONFIG_FULL]  = "Full speed config (usb 1.1)",
      [STR_CONFIG_HIGH]  = "High speed config (usb 2.0)",
@@ -1727,12 +1727,12 @@ index afd7944b737..6803545a0a5 100644
  
      uc->realize        = usb_mtp_realize;
 -    uc->product_desc   = "QEMU USB MTP";
-+    uc->product_desc   = "Mrpiair USB MTP";
++    uc->product_desc   = "Cuahpab USB MTP";
      uc->usb_desc       = &desc;
      uc->cancel_packet  = usb_mtp_cancel_packet;
      uc->handle_attach  = usb_desc_attach;
 diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
-index 1df24541814..5c8c5c9fe57 100644
+index 1df24541814..bbf9401c781 100644
 --- a/hw/usb/dev-network.c
 +++ b/hw/usb/dev-network.c
 @@ -99,16 +99,16 @@ enum usbstring_idx {
@@ -1749,16 +1749,16 @@ index 1df24541814..5c8c5c9fe57 100644
 -    [STRING_SUBSET]             = "QEMU USB Net Subset",
 -    [STRING_RNDIS]              = "QEMU USB Net RNDIS",
 -    [STRING_SERIALNUMBER]       = "1",
-+    [STRING_MANUFACTURER]       = "EQWJ",
-+    [STRING_PRODUCT]            = "EQWJ RNDIS USB Network Adapter",
-+    [STRING_ETHADDR]            = "18084F6CFCEF",
++    [STRING_MANUFACTURER]       = "KAGH",
++    [STRING_PRODUCT]            = "KAGH RNDIS USB Network Adapter",
++    [STRING_ETHADDR]            = "8742D13C58BD",
 +    [STRING_DATA]               = "USB Net Data",
 +    [STRING_CONTROL]            = "USB Net Control",
 +    [STRING_RNDIS_CONTROL]      = "USB Net RNDIS Control",
 +    [STRING_CDC]                = "USB Net CDC",
 +    [STRING_SUBSET]             = "USB Net Subset",
 +    [STRING_RNDIS]              = "USB Net RNDIS",
-+    [STRING_SERIALNUMBER]       = "2901904152",
++    [STRING_SERIALNUMBER]       = "7163156733",
  };
  
  static const USBDescIface desc_iface_rndis[] = {
@@ -1767,7 +1767,7 @@ index 1df24541814..5c8c5c9fe57 100644
      /* mandatory */
      case OID_GEN_VENDOR_DESCRIPTION:
 -        pstrcpy((char *)outbuf, outlen, "QEMU USB RNDIS Net");
-+        pstrcpy((char *)outbuf, outlen, "EQWJ RNDIS USB Net");
++        pstrcpy((char *)outbuf, outlen, "KAGH RNDIS USB Net");
          return strlen((char *)outbuf) + 1;
  
      case OID_GEN_VENDOR_DRIVER_VERSION:
@@ -1776,12 +1776,12 @@ index 1df24541814..5c8c5c9fe57 100644
  
      uc->realize        = usb_net_realize;
 -    uc->product_desc   = "QEMU USB Network Interface";
-+    uc->product_desc   = "EQWJ RNDIS USB Network Adapter";
++    uc->product_desc   = "KAGH RNDIS USB Network Adapter";
      uc->usb_desc       = &desc_net;
      uc->handle_reset   = usb_net_handle_reset;
      uc->handle_control = usb_net_handle_control;
 diff --git a/hw/usb/dev-serial.c b/hw/usb/dev-serial.c
-index 2eb52b2e01e..3b173032b68 100644
+index 2eb52b2e01e..5d6706742ee 100644
 --- a/hw/usb/dev-serial.c
 +++ b/hw/usb/dev-serial.c
 @@ -119,10 +119,10 @@ enum {
@@ -1792,10 +1792,10 @@ index 2eb52b2e01e..3b173032b68 100644
 -    [STR_PRODUCT_SERIAL]  = "QEMU USB SERIAL",
 -    [STR_PRODUCT_BRAILLE] = "QEMU USB BAUM BRAILLE",
 -    [STR_SERIALNUMBER]    = "1",
-+    [STR_MANUFACTURER]    = "Iqvaunq",
-+    [STR_PRODUCT_SERIAL]  = "Iqvaunq USB Serial",
-+    [STR_PRODUCT_BRAILLE] = "Iqvaunq USB Braille",
-+    [STR_SERIALNUMBER]    = "6891480902",
++    [STR_MANUFACTURER]    = "Jaqtufi",
++    [STR_PRODUCT_SERIAL]  = "Jaqtufi USB Serial",
++    [STR_PRODUCT_BRAILLE] = "Jaqtufi USB Braille",
++    [STR_SERIALNUMBER]    = "9449441102",
  };
  
  static const USBDescIface desc_iface0 = {
@@ -1804,7 +1804,7 @@ index 2eb52b2e01e..3b173032b68 100644
      USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
  
 -    uc->product_desc   = "QEMU USB Serial";
-+    uc->product_desc   = "Iqvaunq USB Serial";
++    uc->product_desc   = "Jaqtufi USB Serial";
      uc->usb_desc       = &desc_serial;
      device_class_set_props(dc, serial_properties);
  }
@@ -1813,12 +1813,12 @@ index 2eb52b2e01e..3b173032b68 100644
      USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
  
 -    uc->product_desc   = "QEMU USB Braille";
-+    uc->product_desc   = "Iqvaunq USB Braille";
++    uc->product_desc   = "Jaqtufi USB Braille";
      uc->usb_desc       = &desc_braille;
      device_class_set_props(dc, braille_properties);
  }
 diff --git a/hw/usb/dev-smartcard-reader.c b/hw/usb/dev-smartcard-reader.c
-index 6ce7154feed..8e1a99c8bba 100644
+index 6ce7154feed..748b79059d3 100644
 --- a/hw/usb/dev-smartcard-reader.c
 +++ b/hw/usb/dev-smartcard-reader.c
 @@ -419,9 +419,9 @@ enum {
@@ -1828,9 +1828,9 @@ index 6ce7154feed..8e1a99c8bba 100644
 -    [STR_MANUFACTURER]  = "QEMU",
 -    [STR_PRODUCT]       = "QEMU USB CCID",
 -    [STR_SERIALNUMBER]  = "1",
-+    [STR_MANUFACTURER]  = "Zujwues",
-+    [STR_PRODUCT]       = "Zujwues USB CCID",
-+    [STR_SERIALNUMBER]  = "3448495023",
++    [STR_MANUFACTURER]  = "Igdsao",
++    [STR_PRODUCT]       = "Igdsao USB CCID",
++    [STR_SERIALNUMBER]  = "2604269714",
      [STR_INTERFACE]     = "CCID Interface",
  };
  
@@ -1839,12 +1839,12 @@ index 6ce7154feed..8e1a99c8bba 100644
  
      uc->realize        = ccid_realize;
 -    uc->product_desc   = "QEMU USB CCID";
-+    uc->product_desc   = "Zujwues USB CCID";
++    uc->product_desc   = "Igdsao USB CCID";
      uc->usb_desc       = &desc_ccid;
      uc->handle_reset   = ccid_handle_reset;
      uc->handle_control = ccid_handle_control;
 diff --git a/hw/usb/dev-storage.c b/hw/usb/dev-storage.c
-index b13fe345c45..da60d2350a4 100644
+index b13fe345c45..26af5e3c4bf 100644
 --- a/hw/usb/dev-storage.c
 +++ b/hw/usb/dev-storage.c
 @@ -47,9 +47,9 @@ enum {
@@ -1854,9 +1854,9 @@ index b13fe345c45..da60d2350a4 100644
 -    [STR_MANUFACTURER] = "QEMU",
 -    [STR_PRODUCT]      = "QEMU USB HARDDRIVE",
 -    [STR_SERIALNUMBER] = "1",
-+    [STR_MANUFACTURER] = "KAXUBU",
-+    [STR_PRODUCT]      = "KAXUBU USB HARDDISK",
-+    [STR_SERIALNUMBER] = "GW3YJ6YCQZ61Q8TK",
++    [STR_MANUFACTURER] = "UIJKUX",
++    [STR_PRODUCT]      = "UIJKUX USB HARDDISK",
++    [STR_SERIALNUMBER] = "AZLV1MD24LQRPB59",
      [STR_CONFIG_FULL]  = "Full speed config (usb 1.1)",
      [STR_CONFIG_HIGH]  = "High speed config (usb 2.0)",
      [STR_CONFIG_SUPER] = "Super speed config (usb 3.0)",
@@ -1865,12 +1865,12 @@ index b13fe345c45..da60d2350a4 100644
      USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
  
 -    uc->product_desc   = "QEMU USB MSD";
-+    uc->product_desc   = "KAXUBU USB HARDDISK";
++    uc->product_desc   = "UIJKUX USB HARDDISK";
      uc->usb_desc       = &desc;
      uc->cancel_packet  = usb_msd_cancel_io;
      uc->handle_attach  = usb_desc_attach;
 diff --git a/hw/usb/dev-uas.c b/hw/usb/dev-uas.c
-index 18ebe15d0c4..7bb503aee14 100644
+index 18ebe15d0c4..95a79ba0509 100644
 --- a/hw/usb/dev-uas.c
 +++ b/hw/usb/dev-uas.c
 @@ -170,9 +170,9 @@ enum {
@@ -1880,14 +1880,14 @@ index 18ebe15d0c4..7bb503aee14 100644
 -    [STR_MANUFACTURER] = "QEMU",
 -    [STR_PRODUCT]      = "USB Attached SCSI HBA",
 -    [STR_SERIALNUMBER] = "27842",
-+    [STR_MANUFACTURER] = "Agtdqao",
-+    [STR_PRODUCT]      = "Agtdqao USB Attached SCSI HBA",
-+    [STR_SERIALNUMBER] = "9486177382",
++    [STR_MANUFACTURER] = "Ienvu",
++    [STR_PRODUCT]      = "Ienvu USB Attached SCSI HBA",
++    [STR_SERIALNUMBER] = "5856873540",
      [STR_CONFIG_HIGH]  = "High speed config (usb 2.0)",
      [STR_CONFIG_SUPER] = "Super speed config (usb 3.0)",
  };
 diff --git a/hw/usb/dev-wacom.c b/hw/usb/dev-wacom.c
-index f4b71a21472..2c51a4f664d 100644
+index f4b71a21472..22c31d0854d 100644
 --- a/hw/usb/dev-wacom.c
 +++ b/hw/usb/dev-wacom.c
 @@ -1,5 +1,5 @@
@@ -1906,7 +1906,7 @@ index f4b71a21472..2c51a4f664d 100644
 -    [STR_SERIALNUMBER]     = "1",
 +    [STR_MANUFACTURER]     = "Wacom",
 +    [STR_PRODUCT]          = "Wacom PenPartner Tablet",
-+    [STR_SERIALNUMBER]     = "9561221375",
++    [STR_SERIALNUMBER]     = "7954129175",
  };
  
  static const uint8_t qemu_wacom_hid_report_descriptor[] = {
@@ -1947,7 +1947,7 @@ index f4b71a21472..2c51a4f664d 100644
  }
  
 diff --git a/hw/usb/u2f-emulated.c b/hw/usb/u2f-emulated.c
-index ace5eceadd9..80f10b98c54 100644
+index ace5eceadd9..fd05048adf5 100644
 --- a/hw/usb/u2f-emulated.c
 +++ b/hw/usb/u2f-emulated.c
 @@ -385,7 +385,7 @@ static void u2f_emulated_class_init(ObjectClass *klass, const void *data)
@@ -1955,12 +1955,12 @@ index ace5eceadd9..80f10b98c54 100644
      kc->unrealize = u2f_emulated_unrealize;
      kc->recv_from_guest = u2f_emulated_recv_from_guest;
 -    dc->desc = "QEMU U2F emulated key";
-+    dc->desc = "Ezgiu U2F emulated key";
++    dc->desc = "Axmeyib U2F emulated key";
      device_class_set_props(dc, u2f_emulated_properties);
  }
  
 diff --git a/hw/usb/u2f-passthru.c b/hw/usb/u2f-passthru.c
-index fa8d9cdda89..50a9ed6d06d 100644
+index fa8d9cdda89..dff64ace469 100644
 --- a/hw/usb/u2f-passthru.c
 +++ b/hw/usb/u2f-passthru.c
 @@ -528,7 +528,7 @@ static void u2f_passthru_class_init(ObjectClass *klass, const void *data)
@@ -1968,12 +1968,12 @@ index fa8d9cdda89..50a9ed6d06d 100644
      kc->unrealize = u2f_passthru_unrealize;
      kc->recv_from_guest = u2f_passthru_recv_from_guest;
 -    dc->desc = "QEMU U2F passthrough key";
-+    dc->desc = "Iohorx U2F passthrough key";
++    dc->desc = "Tepoadt U2F passthrough key";
      dc->vmsd = &u2f_passthru_vmstate;
      device_class_set_props(dc, u2f_passthru_properties);
      set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 diff --git a/hw/usb/u2f.c b/hw/usb/u2f.c
-index b051a999d3a..09b6830ab1b 100644
+index b051a999d3a..6e40fca2b77 100644
 --- a/hw/usb/u2f.c
 +++ b/hw/usb/u2f.c
 @@ -46,9 +46,9 @@ enum {
@@ -1983,9 +1983,9 @@ index b051a999d3a..09b6830ab1b 100644
 -    [STR_MANUFACTURER]     = "QEMU",
 -    [STR_PRODUCT]          = "U2F USB key",
 -    [STR_SERIALNUMBER]     = "0",
-+    [STR_MANUFACTURER]     = "Zloiqe",
-+    [STR_PRODUCT]          = "Zloiqe U2F USB key",
-+    [STR_SERIALNUMBER]     = "4183517408",
++    [STR_MANUFACTURER]     = "Iujha",
++    [STR_PRODUCT]          = "Iujha U2F USB key",
++    [STR_SERIALNUMBER]     = "4711931713",
      [STR_CONFIG]           = "U2F key config",
      [STR_INTERFACE]        = "U2F key interface"
  };
@@ -1994,7 +1994,7 @@ index b051a999d3a..09b6830ab1b 100644
      USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
  
 -    uc->product_desc   = "QEMU U2F USB key";
-+    uc->product_desc   = "Zloiqe U2F USB key";
++    uc->product_desc   = "Iujha U2F USB key";
      uc->usb_desc       = &desc_u2f_key;
      uc->handle_reset   = u2f_key_handle_reset;
      uc->handle_control = u2f_key_handle_control;
@@ -2003,7 +2003,7 @@ index b051a999d3a..09b6830ab1b 100644
      uc->realize        = u2f_key_realize;
      uc->unrealize      = u2f_key_unrealize;
 -    dc->desc           = "QEMU U2F key";
-+    dc->desc           = "Zloiqe U2F USB key";
++    dc->desc           = "Iujha U2F USB key";
      dc->vmsd           = &vmstate_u2f_key;
  }
  
@@ -2021,7 +2021,7 @@ index 3368ac89150..bcc5c28fe65 100644
      dc->bus_type = TYPE_AP_BUS;
  
 diff --git a/include/hw/acpi/aml-build.h b/include/hw/acpi/aml-build.h
-index f38e1297193..53012df1d24 100644
+index f38e1297193..ca570cc89cf 100644
 --- a/include/hw/acpi/aml-build.h
 +++ b/include/hw/acpi/aml-build.h
 @@ -4,8 +4,8 @@
@@ -2030,8 +2030,8 @@ index f38e1297193..53012df1d24 100644
  
 -#define ACPI_BUILD_APPNAME6 "BOCHS "
 -#define ACPI_BUILD_APPNAME8 "BXPC    "
-+#define ACPI_BUILD_APPNAME6 "VQDAEZ"
-+#define ACPI_BUILD_APPNAME8 "BVEONBIR"
++#define ACPI_BUILD_APPNAME6 "HFWTUO"
++#define ACPI_BUILD_APPNAME8 "IJEAKHPH"
  
  #define ACPI_BUILD_TABLE_FILE "etc/acpi/tables"
  #define ACPI_BUILD_RSDP_FILE "etc/acpi/rsdp"
@@ -2124,7 +2124,7 @@ index 3ea732f4e6a..6f2b1303b59 100644
  struct smbios_type_32 {
      struct smbios_structure_header header;
 diff --git a/include/hw/pci/pci.h b/include/hw/pci/pci.h
-index b72e4845009..54630c96867 100644
+index b72e4845009..818e2fc070d 100644
 --- a/include/hw/pci/pci.h
 +++ b/include/hw/pci/pci.h
 @@ -57,12 +57,12 @@ extern bool pci_available;
@@ -2134,7 +2134,7 @@ index b72e4845009..54630c96867 100644
 -#define PCI_VENDOR_ID_QEMU               0x1234
 -#define PCI_DEVICE_ID_QEMU_VGA           0x1111
 +#define PCI_VENDOR_ID_QEMU               0x1022
-+#define PCI_DEVICE_ID_QEMU_VGA           0x3520
++#define PCI_DEVICE_ID_QEMU_VGA           0x3312
  #define PCI_DEVICE_ID_QEMU_IPMI          0x1112
  
  /* VMWare (0x15ad) */
@@ -2159,7 +2159,7 @@ index b72e4845009..54630c96867 100644
   *                 virtio_bus_get_vdev_id(bus)
   */
 -#define PCI_DEVICE_ID_VIRTIO_10_BASE     0x1040
-+#define PCI_DEVICE_ID_VIRTIO_10_BASE     0xCDBF
++#define PCI_DEVICE_ID_VIRTIO_10_BASE     0xCCEF
  
 -#define PCI_VENDOR_ID_REDHAT             0x1b36
 +#define PCI_VENDOR_ID_REDHAT             0x1022
@@ -2174,15 +2174,24 @@ index b72e4845009..54630c96867 100644
 -#define PCI_DEVICE_ID_REDHAT_XHCI        0x000d
 -#define PCI_DEVICE_ID_REDHAT_PCIE_BRIDGE 0x000e
 +#define PCI_DEVICE_ID_REDHAT_PCIE_RP     0x1448
-+#define PCI_DEVICE_ID_REDHAT_XHCI        0x3520
++#define PCI_DEVICE_ID_REDHAT_XHCI        0x3312
 +#define PCI_DEVICE_ID_REDHAT_PCIE_BRIDGE 0x1633
  #define PCI_DEVICE_ID_REDHAT_MDPY        0x000f
  #define PCI_DEVICE_ID_REDHAT_NVME        0x0010
  #define PCI_DEVICE_ID_REDHAT_PVPANIC     0x0011
 diff --git a/include/hw/pci/pci_ids.h b/include/hw/pci/pci_ids.h
-index 16034aaa2c7..939fb375dd3 100644
+index 16034aaa2c7..7904ed3aaa6 100644
 --- a/include/hw/pci/pci_ids.h
 +++ b/include/hw/pci/pci_ids.h
+@@ -273,7 +273,7 @@
+ #define PCI_DEVICE_ID_INTEL_82801I_EHCI2 0x293c
+ #define PCI_DEVICE_ID_INTEL_82599_SFP_VF 0x10ed
+ 
+-#define PCI_DEVICE_ID_INTEL_P35_MCH      0x29c0
++#define PCI_DEVICE_ID_INTEL_P35_MCH      0x1633
+ 
+ #define PCI_VENDOR_ID_XEN                0x5853
+ #define PCI_DEVICE_ID_XEN_PLATFORM       0x0001
 @@ -284,7 +284,7 @@
  #define PCI_VENDOR_ID_TEWS               0x1498
  #define PCI_DEVICE_ID_TEWS_TPCI200       0x30C8
@@ -2247,7 +2256,7 @@ index f15189a5409..d68688eec29 100644
  pxe-rom-eepro100 efi-rom-eepro100 : DID := 1209
  pxe-rom-ne2k_pci efi-rom-ne2k_pci : VID := 1050
 diff --git a/target/i386/cpu.c b/target/i386/cpu.c
-index 78308a82a05..416245feeb5 100644
+index 78308a82a05..430124d34ad 100644
 --- a/target/i386/cpu.c
 +++ b/target/i386/cpu.c
 @@ -2204,6 +2204,8 @@ typedef struct X86CPUVersionDefinition {
@@ -2342,7 +2351,7 @@ index 78308a82a05..416245feeb5 100644
      },
      {
          .name = "Westmere",
-+        .t4_family = 0xC6,
++        .t4_family = 0xCD,
 +        .t4_upgrade = 0x2D,
          .level = 11,
          .vendor = CPUID_VENDOR_INTEL,
@@ -2359,7 +2368,7 @@ index 78308a82a05..416245feeb5 100644
               VMX_SECONDARY_EXEC_ENABLE_VPID | VMX_SECONDARY_EXEC_UNRESTRICTED_GUEST,
          .xlevel = 0x80000008,
 -        .model_id = "Westmere E56xx/L56xx/X56xx (Nehalem-C)",
-+        .model_id = "Intel(R) Core(TM) i7-4790T CPU @ 2.70GHz",
++        .model_id = "Intel(R) Core(TM) i5-4670K CPU @ 3.40GHz",
          .versions = (X86CPUVersionDefinition[]) {
              { .version = 1 },
              {
@@ -2368,7 +2377,7 @@ index 78308a82a05..416245feeb5 100644
                      { "spec-ctrl", "on" },
                      { "model-id",
 -                      "Westmere E56xx/L56xx/X56xx (IBRS update)" },
-+                      "Intel(R) Core(TM) i7-4790T CPU @ 2.70GHz" },
++                      "Intel(R) Core(TM) i5-4670K CPU @ 3.40GHz" },
                      { /* end of list */ }
                  }
              },
@@ -2376,7 +2385,7 @@ index 78308a82a05..416245feeb5 100644
      },
      {
          .name = "SandyBridge",
-+        .t4_family = 0xC6,
++        .t4_family = 0xCD,
 +        .t4_upgrade = 0x24,
          .level = 0xd,
          .vendor = CPUID_VENDOR_INTEL,
@@ -2392,7 +2401,7 @@ index 78308a82a05..416245feeb5 100644
               VMX_SECONDARY_EXEC_ENABLE_VPID | VMX_SECONDARY_EXEC_UNRESTRICTED_GUEST,
          .xlevel = 0x80000008,
 -        .model_id = "Intel Xeon E312xx (Sandy Bridge)",
-+        .model_id = "Intel(R) Core(TM) i7-2600S CPU @ 2.80GHz",
++        .model_id = "Intel(R) Core(TM) i5-2550K CPU @ 3.40GHz",
          .versions = (X86CPUVersionDefinition[]) {
              { .version = 1 },
              {
@@ -2401,7 +2410,7 @@ index 78308a82a05..416245feeb5 100644
                      { "spec-ctrl", "on" },
                      { "model-id",
 -                      "Intel Xeon E312xx (Sandy Bridge, IBRS update)" },
-+                      "Intel(R) Core(TM) i7-2600S CPU @ 2.80GHz" },
++                      "Intel(R) Core(TM) i5-2550K CPU @ 3.40GHz" },
                      { /* end of list */ }
                  }
              },
@@ -2409,7 +2418,7 @@ index 78308a82a05..416245feeb5 100644
      },
      {
          .name = "IvyBridge",
-+        .t4_family = 0xCD,
++        .t4_family = 0xCE,
 +        .t4_upgrade = 0x3C,
          .level = 0xd,
          .vendor = CPUID_VENDOR_INTEL,
@@ -2426,7 +2435,7 @@ index 78308a82a05..416245feeb5 100644
               VMX_SECONDARY_EXEC_RDRAND_EXITING,
          .xlevel = 0x80000008,
 -        .model_id = "Intel Xeon E3-12xx v2 (Ivy Bridge)",
-+        .model_id = "Intel(R) Core(TM) i5-8257U CPU @ 1.40GHz",
++        .model_id = "Intel(R) Core(TM) i3-8140U CPU @ 2.10GHz",
          .versions = (X86CPUVersionDefinition[]) {
              { .version = 1 },
              {
@@ -2435,7 +2444,7 @@ index 78308a82a05..416245feeb5 100644
                      { "spec-ctrl", "on" },
                      { "model-id",
 -                      "Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)" },
-+                      "Intel(R) Core(TM) i5-8257U CPU @ 1.40GHz" },
++                      "Intel(R) Core(TM) i3-8140U CPU @ 2.10GHz" },
                      { /* end of list */ }
                  }
              },
