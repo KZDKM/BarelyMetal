@@ -1,0 +1,560 @@
+diff --git a/MdeModulePkg/Logo/Logo.bmp b/MdeModulePkg/Logo/Logo.bmp
+index 3e85229e17..63ca41dbf1 100644
+Binary files a/MdeModulePkg/Logo/Logo.bmp and b/MdeModulePkg/Logo/Logo.bmp differ
+diff --git a/MdeModulePkg/MdeModulePkg.dec b/MdeModulePkg/MdeModulePkg.dec
+index 3698caf902..9d1ccdf57a 100644
+--- a/MdeModulePkg/MdeModulePkg.dec
++++ b/MdeModulePkg/MdeModulePkg.dec
+@@ -1884,7 +1884,7 @@
+ 
+   ## Null-terminated Unicode string of the firmware vendor name that is the default name filled into the EFI System Table.
+   # @Prompt Firmware vendor.
+-  gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor|L"EDK II"|VOID*|0x00010050
++  gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor|L"American Megatrends Inc."|VOID*|0x00010050
+ 
+   ## Firmware revision that is the default revision filled into the EFI System Table.
+   # @Prompt Firmware revision.
+@@ -2112,7 +2112,7 @@
+ 
+   ## Default OEM ID for ACPI table creation, its length must be 0x6 bytes to follow ACPI specification.
+   # @Prompt Default OEM ID for ACPI table creation.
+-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemId|"INTEL "|VOID*|0x30001034
++  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemId|"ALASKA"|VOID*|0x30001034
+ 
+   ## Default OEM Table ID for ACPI table creation, it is "EDK2    ".
+   #  According to ACPI specification, this field is particularly useful when
+@@ -2120,7 +2120,7 @@
+   #  The OEM assigns each dissimilar table a new OEM Table ID.
+   #  This PCD is ignored for definition block.
+   # @Prompt Default OEM Table ID for ACPI table creation.
+-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemTableId|0x20202020324B4445|UINT64|0x30001035
++  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemTableId|0x20202049204D2041|UINT64|0x30001035
+ 
+   ## Default OEM Revision for ACPI table creation.
+   #  According to ACPI specification, for LoadTable() opcode, the OS can also
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Dsdt.asl b/OvmfPkg/Bhyve/AcpiTables/Dsdt.asl
+index 17e2cf69e6..5b0eb800be 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Dsdt.asl
++++ b/OvmfPkg/Bhyve/AcpiTables/Dsdt.asl
+@@ -22,7 +22,7 @@
+  *     Compiler ID      "INTL"
+  *     Compiler Version 0x20150204 (538247684)
+  */
+-DefinitionBlock ("DSDT.aml", "DSDT", 2, "BHYVE", "BVDSDT", 0x00000001)
++DefinitionBlock ("DSDT.aml", "DSDT", 2, "ALASKA", "A M I   ", 0x00000001)
+ {
+     Name (_S5, Package (0x02)
+     {
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Facp.aslc b/OvmfPkg/Bhyve/AcpiTables/Facp.aslc
+index b3d703eb89..1dc0a204da 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Facp.aslc
++++ b/OvmfPkg/Bhyve/AcpiTables/Facp.aslc
+@@ -7,7 +7,7 @@
+ 
+ #include "Platform.h"
+ 
+-#define EFI_ACPI_OEM_TABLE_ID     SIGNATURE_64('B','V','F','A','C','P',' ',' ')
++#define EFI_ACPI_OEM_TABLE_ID     SIGNATURE_64('A',' ','M',' ','I',' ',' ',' ')
+ 
+ EFI_ACPI_3_0_FIXED_ACPI_DESCRIPTION_TABLE FACP = {
+   {
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Hpet.aslc b/OvmfPkg/Bhyve/AcpiTables/Hpet.aslc
+index 73bb784e43..325cfa6b56 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Hpet.aslc
++++ b/OvmfPkg/Bhyve/AcpiTables/Hpet.aslc
+@@ -10,7 +10,7 @@
+ #include "Platform.h"
+ 
+ #define EFI_ACPI_HPET_DESCRIPTION_TABLE_SIGNATURE  SIGNATURE_32('H', 'P', 'E', 'T')
+-#define EFI_ACPI_OEM_TABLE_ID                      SIGNATURE_64('B','V','H','P','E','T',' ',' ')
++#define EFI_ACPI_OEM_TABLE_ID                      SIGNATURE_64('A',' ','M',' ','I',' ',' ',' ')
+ 
+ //
+ // Ensure proper structure formats
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Madt.aslc b/OvmfPkg/Bhyve/AcpiTables/Madt.aslc
+index e8e956ed80..2a2529ec71 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Madt.aslc
++++ b/OvmfPkg/Bhyve/AcpiTables/Madt.aslc
+@@ -15,7 +15,7 @@
+ #include <IndustryStandard/Acpi.h>
+ #include <Platform.h>
+ 
+-#define EFI_ACPI_OEM_TABLE_ID                      SIGNATURE_64('B','V','M','A','D','T',' ',' ')
++#define EFI_ACPI_OEM_TABLE_ID                      SIGNATURE_64('A',' ','M',' ','I',' ',' ',' ')
+ 
+ //
+ // Local APIC address
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Mcfg.aslc b/OvmfPkg/Bhyve/AcpiTables/Mcfg.aslc
+index 62a98d30da..9bddc2d378 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Mcfg.aslc
++++ b/OvmfPkg/Bhyve/AcpiTables/Mcfg.aslc
+@@ -7,7 +7,7 @@
+ 
+ #include "Platform.h"
+ 
+-#define EFI_ACPI_OEM_TABLE_ID                      SIGNATURE_64('B','V','M','C','F','G',' ',' ')
++#define EFI_ACPI_OEM_TABLE_ID                      SIGNATURE_64('A',' ','M',' ','I',' ',' ',' ')
+ 
+ #pragma pack(1)
+ 
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Platform.h b/OvmfPkg/Bhyve/AcpiTables/Platform.h
+index 4561adc9f2..1a1ef1cf82 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Platform.h
++++ b/OvmfPkg/Bhyve/AcpiTables/Platform.h
+@@ -20,9 +20,9 @@
+ //
+ // ACPI table information used to initialize tables.
+ //
+-#define EFI_ACPI_OEM_ID            'B','H','Y','V','E',' '  // OEMID 6 bytes long
++#define EFI_ACPI_OEM_ID            'A','L','A','S','K','A'  // OEMID 6 bytes long
+ #define EFI_ACPI_OEM_REVISION      0x1
+-#define EFI_ACPI_CREATOR_ID        SIGNATURE_32('B','H','Y','V')
++#define EFI_ACPI_CREATOR_ID        SIGNATURE_32('A','M','I',' ')
+ #define EFI_ACPI_CREATOR_REVISION  0x00000001
+ 
+ #define INT_MODEL        0x01
+diff --git a/OvmfPkg/Bhyve/AcpiTables/Spcr.aslc b/OvmfPkg/Bhyve/AcpiTables/Spcr.aslc
+index ec5114ad15..539c68850c 100644
+--- a/OvmfPkg/Bhyve/AcpiTables/Spcr.aslc
++++ b/OvmfPkg/Bhyve/AcpiTables/Spcr.aslc
+@@ -7,7 +7,7 @@
+ 
+ #include "Platform.h"
+ 
+-#define EFI_ACPI_OEM_TABLE_ID     SIGNATURE_64('B','V','S','P','C','R',' ',' ')
++#define EFI_ACPI_OEM_TABLE_ID     SIGNATURE_64('A',' ','M',' ','I',' ',' ',' ')
+ 
+ EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE SPCR = {
+   {
+diff --git a/OvmfPkg/Bhyve/BhyveRfbDxe/VbeShim.c b/OvmfPkg/Bhyve/BhyveRfbDxe/VbeShim.c
+index ea7a364d85..4518800806 100644
+--- a/OvmfPkg/Bhyve/BhyveRfbDxe/VbeShim.c
++++ b/OvmfPkg/Bhyve/BhyveRfbDxe/VbeShim.c
+@@ -203,11 +203,11 @@ InstallVbeShim (
+   VbeInfo     = &VbeInfoFull->Base;
+   Ptr         = VbeInfoFull->Buffer;
+ 
+-  CopyMem (VbeInfo->Signature, "VESA", 4);
++  CopyMem (VbeInfo->Signature, "AVXB", 4);
+   VbeInfo->VesaVersion = 0x0200;
+ 
+   VbeInfo->OemNameAddress = (UINT32)SegmentC << 12 | (UINT16)((UINTN)Ptr-SegmentC);
+-  CopyMem (Ptr, "FBSD", 5);
++  CopyMem (Ptr, "AQJF", 5);
+   Ptr += 5;
+ 
+   VbeInfo->Capabilities = BIT1 | BIT0; // DAC can be switched into 8-bit mode
+@@ -225,7 +225,7 @@ InstallVbeShim (
+   VbeInfo->OemSoftwareVersion = 0x0200;
+ 
+   VbeInfo->VendorNameAddress = (UINT32)SegmentC << 12 | (UINT16)((UINTN)Ptr-SegmentC);
+-  CopyMem (Ptr, "FBSD", 5);
++  CopyMem (Ptr, "AQJF", 5);
+   Ptr += 5;
+ 
+   VbeInfo->ProductNameAddress = (UINT32)SegmentC << 12 | (UINT16)((UINTN)Ptr-SegmentC);
+diff --git a/OvmfPkg/Bhyve/BhyveX64.dsc b/OvmfPkg/Bhyve/BhyveX64.dsc
+index 5aab790316..71fbe6b92c 100644
+--- a/OvmfPkg/Bhyve/BhyveX64.dsc
++++ b/OvmfPkg/Bhyve/BhyveX64.dsc
+@@ -519,7 +519,7 @@
+ 
+   gEfiMdeModulePkgTokenSpaceGuid.PcdConInConnectOnDemand|FALSE
+ 
+-  gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor|L"BHYVE"
++  gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor|L"ALASKA"
+   gUefiOvmfPkgTokenSpaceGuid.PcdDebugIoPort|0x2F8
+ 
+ ################################################################################
+diff --git a/OvmfPkg/Bhyve/SmbiosPlatformDxe/SmbiosPlatformDxe.c b/OvmfPkg/Bhyve/SmbiosPlatformDxe/SmbiosPlatformDxe.c
+index ba21393f8e..0440be14ca 100644
+--- a/OvmfPkg/Bhyve/SmbiosPlatformDxe/SmbiosPlatformDxe.c
++++ b/OvmfPkg/Bhyve/SmbiosPlatformDxe/SmbiosPlatformDxe.c
+@@ -12,9 +12,9 @@
+ #include "SmbiosPlatformDxe.h"
+ 
+ #define TYPE0_STRINGS \
+-  "EFI Development Kit II / OVMF\0"     /* Vendor */ \
+-  "0.0.0\0"                             /* BiosVersion */ \
+-  "02/06/2015\0"                        /* BiosReleaseDate */
++  "American Megatrends Inc.\0"     /* Vendor */ \
++  "259\0"                             /* BiosVersion */ \
++  "12/11/2017\0"                        /* BiosReleaseDate */
+ //
+ // Type definition and contents of the default Type 0 SMBIOS table.
+ //
+@@ -34,23 +34,52 @@ STATIC CONST OVMF_TYPE0  mOvmfDefaultType0 = {
+     },
+     1,      // SMBIOS_TABLE_STRING       Vendor
+     2,      // SMBIOS_TABLE_STRING       BiosVersion
+-    0xE800, // UINT16                    BiosSegment
++    0xE000, // UINT16                    BiosSegment
+     3,      // SMBIOS_TABLE_STRING       BiosReleaseDate
+-    0,      // UINT8                     BiosSize
++    0xFF,   // UINT8                     BiosSize
+     {      // MISC_BIOS_CHARACTERISTICS BiosCharacteristics
+       0,   // Reserved                                      :2
+       0,   // Unknown                                       :1
+-      1,   // BiosCharacteristicsNotSupported               :1
++      0,   // BiosCharacteristicsNotSupported               :1
+            // Remaining BiosCharacteristics bits left unset :60
++      0,   // IsaIsSupported                                :1
++      0,   // McaIsSupported                                :1
++      0,   // EisaIsSupported                               :1
++      1,   // PciIsSupported                                :1
++      0,   // PcmciaIsSupported                             :1
++      0,   // PlugAndPlayIsSupported                        :1
++      0,   // ApmIsSupported                                :1
++      1,   // BiosIsUpgradable                              :1
++      1,   // BiosShadowingAllowed                          :1
++      0,   // VlVesaIsSupported                             :1
++      0,   // EscdSupportIsAvailable                        :1
++      1,   // BootFromCdIsSupported                         :1
++      1,   // SelectableBootIsSupported                     :1
++      0,   // RomBiosIsSocketed                             :1
++      0,   // BootFromPcmciaIsSupported                     :1
++      1,   // EDDSpecificationIsSupported                   :1
++      0,   // JapaneseNecFloppyIsSupported                  :1
++      0,   // JapaneseToshibaFloppyIsSupported              :1
++      0,   // Floppy525_360IsSupported                      :1
++      0,   // Floppy525_12IsSupported                       :1
++      0,   // Floppy35_720IsSupported                       :1
++      0,   // Floppy35_288IsSupported                       :1
++      0,   // PrintScreenIsSupported                        :1
++      0,   // Keyboard8042IsSupported                       :1
++      1,   // SerialIsSupported                             :1
++      1,   // PrinterIsSupported                            :1
++      0,   // CgaMonoIsSupported                            :1
++      0,   // NecPc98                                       :1
++0x400013   // ReservedForVendor                             :32
+     },
+     {      // BIOSCharacteristicsExtensionBytes[2]
+-      0,   // BiosReserved
+-      0x1C // SystemReserved = VirtualMachineSupported |
++      0x03, // BiosReserved
++      0x0D // SystemReserved = VirtualMachineSupported |
+            //                  UefiSpecificationSupported |
+            //                  TargetContentDistributionEnabled
+     },
+-    0,     // UINT8                     SystemBiosMajorRelease
+-    0,     // UINT8                     SystemBiosMinorRelease
++    2,     // UINT8                     SystemBiosMajorRelease
++    59,    // UINT8                     SystemBiosMinorRelease
+     0xFF,  // UINT8                     EmbeddedControllerFirmwareMajorRelease
+     0xFF   // UINT8                     EmbeddedControllerFirmwareMinorRelease
+   },
+diff --git a/OvmfPkg/Include/IndustryStandard/Q35MchIch9.h b/OvmfPkg/Include/IndustryStandard/Q35MchIch9.h
+index db828d31b3..8ae6d9eac9 100644
+--- a/OvmfPkg/Include/IndustryStandard/Q35MchIch9.h
++++ b/OvmfPkg/Include/IndustryStandard/Q35MchIch9.h
+@@ -20,7 +20,7 @@
+ //
+ // Host Bridge Device ID (DID) value for Q35/MCH
+ //
+-#define INTEL_Q35_MCH_DEVICE_ID  0x29C0
++#define INTEL_Q35_MCH_DEVICE_ID  0x1633
+ 
+ //
+ // B/D/F/Type: 0/0/0/PCI
+diff --git a/OvmfPkg/Library/QemuBootOrderLib/QemuBootOrderLib.c b/OvmfPkg/Library/QemuBootOrderLib/QemuBootOrderLib.c
+index 2fe6ab30c0..bcf6bedcee 100644
+--- a/OvmfPkg/Library/QemuBootOrderLib/QemuBootOrderLib.c
++++ b/OvmfPkg/Library/QemuBootOrderLib/QemuBootOrderLib.c
+@@ -1794,7 +1794,7 @@ StoreQemuBootOrder (
+       UnicodeSPrint (
+         VariableName,
+         sizeof (VariableName),
+-        L"VMMBootOrder%04x",
++        L"Uosrih%04x",
+         VariableIndex++
+         );
+       DEBUG ((DEBUG_INFO, "%a: %s = %s\n", __func__, VariableName, Translated));
+diff --git a/OvmfPkg/Library/QemuFwCfgLib/QemuFwCfgCacheInit.c b/OvmfPkg/Library/QemuFwCfgLib/QemuFwCfgCacheInit.c
+index d3220c8f03..94ddaf61dd 100644
+--- a/OvmfPkg/Library/QemuFwCfgLib/QemuFwCfgCacheInit.c
++++ b/OvmfPkg/Library/QemuFwCfgLib/QemuFwCfgCacheInit.c
+@@ -15,7 +15,7 @@
+ #include <Library/TpmMeasurementLib.h>
+ #include <IndustryStandard/UefiTcgPlatform.h>
+ 
+-#define EV_POSTCODE_INFO_QEMU_FW_CFG_DATA  "QEMU FW CFG"
++#define EV_POSTCODE_INFO_QEMU_FW_CFG_DATA  "LTOZ FW CFG"
+ #define QEMU_FW_CFG_SIZE                   sizeof (EV_POSTCODE_INFO_QEMU_FW_CFG_DATA)
+ 
+ #pragma pack(1)
+diff --git a/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/FwBlockService.c b/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/FwBlockService.c
+index b34298faf8..615521ad90 100644
+--- a/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/FwBlockService.c
++++ b/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/FwBlockService.c
+@@ -984,7 +984,7 @@ FvbInitialize (
+     //
+     DEBUG ((
+       DEBUG_INFO,
+-      "QEMU flash was not detected. Writable FVB is not being installed.\n"
++      "LTOZ Flash was not detected. Writable FVB is not being installed.\n"
+       ));
+     return EFI_WRITE_PROTECTED;
+   }
+@@ -1003,7 +1003,7 @@ FvbInitialize (
+   if (EFI_ERROR (Status)) {
+     DEBUG ((
+       DEBUG_INFO,
+-      "QEMU Flash: Unable to initialize variable FV header\n"
++      "LTOZ Flash: Unable to initialize variable FV header\n"
+       ));
+     return EFI_WRITE_PROTECTED;
+   }
+diff --git a/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/QemuFlash.c b/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/QemuFlash.c
+index 5e393e98ed..48ba992b71 100644
+--- a/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/QemuFlash.c
++++ b/OvmfPkg/QemuFlashFvbServicesRuntimeDxe/QemuFlash.c
+@@ -74,11 +74,11 @@ QemuFlashDetected (
+   }
+ 
+   if (Offset >= mFdBlockSize) {
+-    DEBUG ((DEBUG_INFO, "QEMU Flash: Failed to find probe location\n"));
++    DEBUG ((DEBUG_INFO, "LTOZ Flash: Failed to find probe location\n"));
+     return FALSE;
+   }
+ 
+-  DEBUG ((DEBUG_INFO, "QEMU Flash: Attempting flash detection at %p\n", Ptr));
++  DEBUG ((DEBUG_INFO, "LTOZ Flash: Attempting flash detection at %p\n", Ptr));
+ 
+   if (MemEncryptSevEsIsEnabled ()) {
+     //
+@@ -92,7 +92,7 @@ QemuFlashDetected (
+     //
+     DEBUG ((
+       DEBUG_INFO,
+-      "QEMU Flash: SEV-ES enabled, assuming FD behaves as FLASH\n"
++      "LTOZ Flash: SEV-ES enabled, assuming FD behaves as FLASH\n"
+       ));
+     return TRUE;
+   }
+@@ -103,15 +103,15 @@ QemuFlashDetected (
+   if ((OriginalUint8 != CLEAR_STATUS_CMD) &&
+       (ProbeUint8 == CLEAR_STATUS_CMD))
+   {
+-    DEBUG ((DEBUG_INFO, "QemuFlashDetected => FD behaves as RAM\n"));
++    DEBUG ((DEBUG_INFO, "LtozFlashDetected => FD behaves as RAM\n"));
+     *Ptr = OriginalUint8;
+   } else {
+     *Ptr       = READ_STATUS_CMD;
+     ProbeUint8 = *Ptr;
+     if (ProbeUint8 == OriginalUint8) {
+-      DEBUG ((DEBUG_INFO, "QemuFlashDetected => FD behaves as ROM\n"));
++      DEBUG ((DEBUG_INFO, "LtozFlashDetected => FD behaves as ROM\n"));
+     } else if (ProbeUint8 == READ_STATUS_CMD) {
+-      DEBUG ((DEBUG_INFO, "QemuFlashDetected => FD behaves as RAM\n"));
++      DEBUG ((DEBUG_INFO, "LtozFlashDetected => FD behaves as RAM\n"));
+       *Ptr = OriginalUint8;
+     } else if (ProbeUint8 == CLEARED_ARRAY_STATUS) {
+       *Ptr       = WRITE_BYTE_CMD;
+@@ -120,9 +120,9 @@ QemuFlashDetected (
+       ProbeUint8 = *Ptr;
+       *Ptr       = READ_ARRAY_CMD;
+       if (ProbeUint8 & 0x10 /* programming error */) {
+-        DEBUG ((DEBUG_INFO, "QemuFlashDetected => FD behaves as FLASH, write-protected\n"));
++        DEBUG ((DEBUG_INFO, "LtozFlashDetected => FD behaves as FLASH, write-protected\n"));
+       } else {
+-        DEBUG ((DEBUG_INFO, "QemuFlashDetected => FD behaves as FLASH, writable\n"));
++        DEBUG ((DEBUG_INFO, "LtozFlashDetected => FD behaves as FLASH, writable\n"));
+         FlashDetected = TRUE;
+       }
+     }
+@@ -130,7 +130,7 @@ QemuFlashDetected (
+ 
+   DEBUG ((
+     DEBUG_INFO,
+-    "QemuFlashDetected => %a\n",
++    "LtozFlashDetected => %a\n",
+     FlashDetected ? "Yes" : "No"
+     ));
+   return FlashDetected;
+diff --git a/OvmfPkg/QemuVideoDxe/ComponentName.c b/OvmfPkg/QemuVideoDxe/ComponentName.c
+index 7972b9309c..28386e6d03 100644
+--- a/OvmfPkg/QemuVideoDxe/ComponentName.c
++++ b/OvmfPkg/QemuVideoDxe/ComponentName.c
+@@ -28,12 +28,12 @@ GLOBAL_REMOVE_IF_UNREFERENCED EFI_COMPONENT_NAME2_PROTOCOL  gQemuVideoComponentN
+ };
+ 
+ GLOBAL_REMOVE_IF_UNREFERENCED EFI_UNICODE_STRING_TABLE  mQemuVideoDriverNameTable[] = {
+-  { "eng;en", L"QEMU Video Driver" },
++  { "eng;en", L"LTOZ Video Driver" },
+   { NULL,     NULL                 }
+ };
+ 
+ GLOBAL_REMOVE_IF_UNREFERENCED EFI_UNICODE_STRING_TABLE  mQemuVideoControllerNameTable[] = {
+-  { "eng;en", L"QEMU Video PCI Adapter" },
++  { "eng;en", L"LTOZ Video PCI Adapter" },
+   { NULL,     NULL                      }
+ };
+ 
+diff --git a/OvmfPkg/QemuVideoDxe/Driver.c b/OvmfPkg/QemuVideoDxe/Driver.c
+index 6feca83802..39b6800dd0 100644
+--- a/OvmfPkg/QemuVideoDxe/Driver.c
++++ b/OvmfPkg/QemuVideoDxe/Driver.c
+@@ -41,34 +41,34 @@ QEMU_VIDEO_CARD  gQemuVideoCardList[] = {
+     L"Cirrus 5446"
+   },{
+     PCI_CLASS_DISPLAY_VGA,
+-    0x1234,
+-    0x1111,
++    0x1022,
++    0x3312,
+     QEMU_VIDEO_BOCHS_MMIO,
+-    L"QEMU Standard VGA"
++    L"LTOZ Standard VGA"
+   },{
+     PCI_CLASS_DISPLAY_OTHER,
+-    0x1234,
+-    0x1111,
++    0x1022,
++    0x3312,
+     QEMU_VIDEO_BOCHS_MMIO,
+-    L"QEMU Standard VGA (secondary)"
++    L"LTOZ Standard VGA (secondary)"
+   },{
+     PCI_CLASS_DISPLAY_VGA,
+-    0x1b36,
++    0x1022,
+     0x0100,
+     QEMU_VIDEO_BOCHS,
+-    L"QEMU QXL VGA"
++    L"LTOZ QXL VGA"
+   },{
+     PCI_CLASS_DISPLAY_VGA,
+-    0x1af4,
++    0x1022,
+     0x1050,
+     QEMU_VIDEO_BOCHS_MMIO,
+-    L"QEMU VirtIO VGA"
++    L"LTOZ VirtIO VGA"
+   },{
+     PCI_CLASS_DISPLAY_VGA,
+-    0x15ad,
++    0x1022,
+     0x0405,
+     QEMU_VIDEO_VMWARE_SVGA,
+-    L"QEMU VMWare SVGA"
++    L"LTOZ VMWare SVGA"
+   },{
+     0     /* end of list */
+   }
+diff --git a/OvmfPkg/SmbiosPlatformDxe/SmbiosPlatformDxe.c b/OvmfPkg/SmbiosPlatformDxe/SmbiosPlatformDxe.c
+index e929da6b81..8bb0af1a37 100644
+--- a/OvmfPkg/SmbiosPlatformDxe/SmbiosPlatformDxe.c
++++ b/OvmfPkg/SmbiosPlatformDxe/SmbiosPlatformDxe.c
+@@ -27,23 +27,52 @@ STATIC CONST SMBIOS_TABLE_TYPE0  mOvmfDefaultType0 = {
+   },
+   1,      // SMBIOS_TABLE_STRING       Vendor
+   2,      // SMBIOS_TABLE_STRING       BiosVersion
+-  0xE800, // UINT16                    BiosSegment
++  0xE000, // UINT16                    BiosSegment
+   3,      // SMBIOS_TABLE_STRING       BiosReleaseDate
+-  0,      // UINT8                     BiosSize
++  0xFF,   // UINT8                     BiosSize
+   {      // MISC_BIOS_CHARACTERISTICS BiosCharacteristics
+     0,   // Reserved                                      :2
+     0,   // Unknown                                       :1
+-    1,   // BiosCharacteristicsNotSupported               :1
++    0,   // BiosCharacteristicsNotSupported               :1
+     // Remaining BiosCharacteristics bits left unset :60
++    0,   // IsaIsSupported                                :1
++    0,   // McaIsSupported                                :1
++    0,   // EisaIsSupported                               :1
++    1,   // PciIsSupported                                :1
++    0,   // PcmciaIsSupported                             :1
++    0,   // PlugAndPlayIsSupported                        :1
++    0,   // ApmIsSupported                                :1
++    1,   // BiosIsUpgradable                              :1
++    1,   // BiosShadowingAllowed                          :1
++    0,   // VlVesaIsSupported                             :1
++    0,   // EscdSupportIsAvailable                        :1
++    1,   // BootFromCdIsSupported                         :1
++    1,   // SelectableBootIsSupported                     :1
++    0,   // RomBiosIsSocketed                             :1
++    0,   // BootFromPcmciaIsSupported                     :1
++    1,   // EDDSpecificationIsSupported                   :1
++    0,   // JapaneseNecFloppyIsSupported                  :1
++    0,   // JapaneseToshibaFloppyIsSupported              :1
++    0,   // Floppy525_360IsSupported                      :1
++    0,   // Floppy525_12IsSupported                       :1
++    0,   // Floppy35_720IsSupported                       :1
++    0,   // Floppy35_288IsSupported                       :1
++    0,   // PrintScreenIsSupported                        :1
++    0,   // Keyboard8042IsSupported                       :1
++    1,   // SerialIsSupported                             :1
++    1,   // PrinterIsSupported                            :1
++    0,   // CgaMonoIsSupported                            :1
++    0,   // NecPc98                                       :1
++0x400013 // ReservedForVendor                             :32
+   },
+   {      // BIOSCharacteristicsExtensionBytes[2]
+-    0,   // BiosReserved
+-    0x1C // SystemReserved = VirtualMachineSupported |
++    0x03, // BiosReserved
++    0x0D // SystemReserved = VirtualMachineSupported |
+     //                  UefiSpecificationSupported |
+     //                  TargetContentDistributionEnabled
+   },
+-  0,     // UINT8                     SystemBiosMajorRelease
+-  0,     // UINT8                     SystemBiosMinorRelease
++  2,     // UINT8                     SystemBiosMajorRelease
++  59,    // UINT8                     SystemBiosMinorRelease
+   0xFF,  // UINT8                     EmbeddedControllerFirmwareMajorRelease
+   0xFF   // UINT8                     EmbeddedControllerFirmwareMinorRelease
+ };
+@@ -146,21 +175,21 @@ InstallAllStructures (
+     VendStr = (CHAR16 *)FixedPcdGetPtr (PcdFirmwareVendor);
+     VendLen = StrLen (VendStr);
+     if (VendLen < 3) {
+-      VendStr = L"unknown";
++      VendStr = L"American Megatrends Inc.";
+       VendLen = StrLen (VendStr);
+     }
+ 
+     VersStr = (CHAR16 *)FixedPcdGetPtr (PcdFirmwareVersionString);
+     VersLen = StrLen (VersStr);
+     if (VersLen < 3) {
+-      VersStr = L"unknown";
++      VersStr = L"259";
+       VersLen = StrLen (VersStr);
+     }
+ 
+     DateStr = (CHAR16 *)FixedPcdGetPtr (PcdFirmwareReleaseDateString);
+     DateLen = StrLen (DateStr);
+     if (DateLen < 3) {
+-      DateStr = L"02/02/2022";
++      DateStr = L"12/11/2017";
+       DateLen = StrLen (DateStr);
+     }
+ 
+diff --git a/SecurityPkg/Library/AuthVariableLib/AuthServiceInternal.h b/SecurityPkg/Library/AuthVariableLib/AuthServiceInternal.h
+index f7bf771d55..02b9f2c546 100644
+--- a/SecurityPkg/Library/AuthVariableLib/AuthServiceInternal.h
++++ b/SecurityPkg/Library/AuthVariableLib/AuthServiceInternal.h
+@@ -73,8 +73,8 @@ typedef enum {
+ /// | AUTH_CERT_DB_DATA          | <-- Last CERT
+ /// +----------------------------+
+ ///
+-#define EFI_CERT_DB_NAME           L"certdb"
+-#define EFI_CERT_DB_VOLATILE_NAME  L"certdbv"
++#define EFI_CERT_DB_NAME           L"dbYpuoicy"
++#define EFI_CERT_DB_VOLATILE_NAME  L"dbvYpuoicy"
+ 
+ #pragma pack(1)
+ typedef struct {
+diff --git a/ShellPkg/ShellPkg.dec b/ShellPkg/ShellPkg.dec
+index 18df262106..eab37e3551 100644
+--- a/ShellPkg/ShellPkg.dec
++++ b/ShellPkg/ShellPkg.dec
+@@ -123,7 +123,7 @@
+   gEfiShellPkgTokenSpaceGuid.PcdShellScreenLogCount|3|UINT8|0x00000008
+ 
+   ## Unicode string of the shell supplier
+-  gEfiShellPkgTokenSpaceGuid.PcdShellSupplier|L"EDK II"|VOID*|0x00000010
++  gEfiShellPkgTokenSpaceGuid.PcdShellSupplier|L"American Megatrends Inc."|VOID*|0x00000010
+ 
+   ## Do extended decode of USB for determining media type
+   gEfiShellPkgTokenSpaceGuid.PcdUsbExtendedDecode|TRUE|BOOLEAN|0x00000011
