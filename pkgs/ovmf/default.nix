@@ -7,9 +7,6 @@
   edk2,
   cpu ? "amd",
 
-  # Boot logo: path to a BMP file, or null to use EDK2 default
-  bootLogo ? null,
-
   nasm,
   acpica-tools,
   python3,

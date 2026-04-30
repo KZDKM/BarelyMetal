@@ -122,62 +122,55 @@ let
   patchedOvmf = pkgs.callPackage ../pkgs/ovmf {
     inherit autovirt edk2-src;
     cpu = resolvedCpu;
-    biosVendor = resolvedBiosVendor;
-    biosVersion = resolvedBiosVersion;
-    biosDate = resolvedBiosDate;
-    biosRevision = resolvedBiosRevision;
-    acpiOemId = resolvedAcpiOemId;
-    acpiOemTableId = resolvedAcpiOemTableIdHex;
-    acpiOemRevision = resolvedAcpiOemRevision;
-    acpiCreatorId = resolvedAcpiCreatorIdHex;
-    acpiCreatorRevision = resolvedAcpiCreatorRevision;
-    bootLogo = spoofCfg.bootLogo;
   };
 
   # Wrap patchedQemu so its firmware JSON descriptors point to our patched OVMF.
   # This is how modern nixpkgs libvirtd discovers OVMF (no more ovmf.packages option).
-  qemuWithOvmf = pkgs.runCommand "qemu-with-patched-ovmf" {
-    nativeBuildInputs = [ pkgs.jq ];
-    inherit (patchedQemu) version;
-    passthru = (patchedQemu.passthru or {}) // {
-      inherit (patchedQemu) version;
-    };
-  } ''
-    mkdir -p $out
-    # Symlink everything from the patched QEMU
-    for item in ${patchedQemu}/*; do
-      ln -s "$item" "$out/$(basename "$item")"
-    done
-    # Override share/qemu/firmware with our patched OVMF paths
-    rm -f $out/share
-    mkdir -p $out/share
-    for item in ${patchedQemu}/share/*; do
-      if [ "$(basename "$item")" = "qemu" ]; then
-        mkdir -p $out/share/qemu
-        for qitem in ${patchedQemu}/share/qemu/*; do
-          if [ "$(basename "$qitem")" = "firmware" ]; then
-            mkdir -p $out/share/qemu/firmware
-            for f in ${patchedQemu}/share/qemu/firmware/*.json; do
-              fname="$(basename "$f")"
-              # Rewrite firmware paths to point to our patched OVMF
-              jq \
-                --arg code "${patchedOvmf}/FV/OVMF_CODE.fd" \
-                --arg vars "${patchedOvmf}/FV/OVMF_VARS.fd" \
-                'if .mapping.executable.filename then
-                   .mapping.executable.filename = $code |
-                   .mapping."nvram-template".filename = $vars
-                 else . end' \
-                "$f" > "$out/share/qemu/firmware/$fname"
+  qemuWithOvmf =
+    pkgs.runCommand "qemu-with-patched-ovmf"
+      {
+        nativeBuildInputs = [ pkgs.jq ];
+        inherit (patchedQemu) version;
+        passthru = (patchedQemu.passthru or { }) // {
+          inherit (patchedQemu) version;
+        };
+      }
+      ''
+        mkdir -p $out
+        # Symlink everything from the patched QEMU
+        for item in ${patchedQemu}/*; do
+          ln -s "$item" "$out/$(basename "$item")"
+        done
+        # Override share/qemu/firmware with our patched OVMF paths
+        rm -f $out/share
+        mkdir -p $out/share
+        for item in ${patchedQemu}/share/*; do
+          if [ "$(basename "$item")" = "qemu" ]; then
+            mkdir -p $out/share/qemu
+            for qitem in ${patchedQemu}/share/qemu/*; do
+              if [ "$(basename "$qitem")" = "firmware" ]; then
+                mkdir -p $out/share/qemu/firmware
+                for f in ${patchedQemu}/share/qemu/firmware/*.json; do
+                  fname="$(basename "$f")"
+                  # Rewrite firmware paths to point to our patched OVMF
+                  jq \
+                    --arg code "${patchedOvmf}/FV/OVMF_CODE.fd" \
+                    --arg vars "${patchedOvmf}/FV/OVMF_VARS.fd" \
+                    'if .mapping.executable.filename then
+                       .mapping.executable.filename = $code |
+                       .mapping."nvram-template".filename = $vars
+                     else . end' \
+                    "$f" > "$out/share/qemu/firmware/$fname"
+                done
+              else
+                ln -s "$qitem" "$out/share/qemu/$(basename "$qitem")"
+              fi
             done
           else
-            ln -s "$qitem" "$out/share/qemu/$(basename "$qitem")"
+            ln -s "$item" "$out/share/$(basename "$item")"
           fi
         done
-      else
-        ln -s "$item" "$out/share/$(basename "$item")"
-      fi
-    done
-  '';
+      '';
 
   smbiosSpoofer = pkgs.callPackage ../pkgs/smbios-spoofer { inherit autovirt; };
   barelyMetalUtils = pkgs.callPackage ../pkgs/utils { inherit autovirt; };
@@ -186,12 +179,15 @@ let
   guestScripts = pkgs.callPackage ../pkgs/guest-scripts { inherit autovirt; };
 
   # Guest scripts ISO (built by Nix, copied to stable path at activation)
-  guestScriptsIso = pkgs.runCommand "barely-metal-guest-scripts.iso" {
-    nativeBuildInputs = [ pkgs.cdrkit ];
-  } ''
-    mkisofs -o "$out" -V "BM_SCRIPTS" -R -J \
-      "${guestScripts}/share/barely-metal/guest-scripts"
-  '';
+  guestScriptsIso =
+    pkgs.runCommand "barely-metal-guest-scripts.iso"
+      {
+        nativeBuildInputs = [ pkgs.cdrkit ];
+      }
+      ''
+        mkisofs -o "$out" -V "BM_SCRIPTS" -R -J \
+          "${guestScripts}/share/barely-metal/guest-scripts"
+      '';
 
   guestScriptsIsoPath = "${stateDir}/firmware/guest-scripts.iso";
 
@@ -203,7 +199,10 @@ let
   # Map resolved ACPI tables to stable paths under stateDir
   stableAcpiTables =
     let
-      userTables = lib.imap0 (i: t: { src = t; dst = "${acpiTableDir}/user_${toString i}.aml"; }) vmCfg.acpiTables;
+      userTables = lib.imap0 (i: t: {
+        src = t;
+        dst = "${acpiTableDir}/user_${toString i}.aml";
+      }) vmCfg.acpiTables;
       batteryTable = lib.optional vmCfg.useFakeBattery {
         src = "${compiledAcpiTables}/fake_battery.aml";
         dst = "${acpiTableDir}/fake_battery.aml";
@@ -230,7 +229,11 @@ let
       ${lib.optionalString (vmCfg.networkMac != null) "--mac \"${vmCfg.networkMac}\""} \
       ${lib.optionalString vmCfg.enableHyperVPassthrough "--hyperv"} \
       ${lib.optionalString (vmCfg.isoPath != null) "--iso \"${toString vmCfg.isoPath}\""} \
-      ${lib.optionalString (vmCfg.diskPath != null) "--disk \"${vmCfg.diskPath}\" --disk-size \"${vmCfg.diskSize}\""} \
+      ${
+        lib.optionalString (
+          vmCfg.diskPath != null
+        ) "--disk \"${vmCfg.diskPath}\" --disk-size \"${vmCfg.diskSize}\""
+      } \
       --smbios-bin "${stateDir}/firmware/smbios.bin" \
       ${lib.concatMapStringsSep " " (t: "--acpi-table \"${t.dst}\"") stableAcpiTables} \
       ${lib.optionalString cfg.installGuestScripts "--guest-iso \"${guestScriptsIsoPath}\""} \
@@ -239,27 +242,33 @@ let
   '';
 
   # Compile ACPI DSL tables with host OEM IDs patched in
-  compiledAcpiTables = pkgs.runCommand "barely-metal-acpi-tables" {
-    nativeBuildInputs = [ pkgs.acpica-tools pkgs.gnused ];
-  } ''
-    mkdir -p $out
+  compiledAcpiTables =
+    pkgs.runCommand "barely-metal-acpi-tables"
+      {
+        nativeBuildInputs = [
+          pkgs.acpica-tools
+          pkgs.gnused
+        ];
+      }
+      ''
+        mkdir -p $out
 
-    compile_dsl() {
-      local src="$1" name="$2"
-      local patched="$name.dsl"
-      cp "$src" "$patched"
+        compile_dsl() {
+          local src="$1" name="$2"
+          local patched="$name.dsl"
+          cp "$src" "$patched"
 
-      # Patch OEM ID and OEM Table ID in DefinitionBlock to match host
-      sed -i -E \
-        's/(DefinitionBlock\s*\(\s*"[^"]*"\s*,\s*"SSDT"\s*,\s*[0-9]+\s*,\s*)"[^"]*"(\s*,\s*)"[^"]*"/\1"${resolvedAcpiOemId}"\2"${resolvedAcpiOemTableId}"/' \
-        "$patched"
+          # Patch OEM ID and OEM Table ID in DefinitionBlock to match host
+          sed -i -E \
+            's/(DefinitionBlock\s*\(\s*"[^"]*"\s*,\s*"SSDT"\s*,\s*[0-9]+\s*,\s*)"[^"]*"(\s*,\s*)"[^"]*"/\1"${resolvedAcpiOemId}"\2"${resolvedAcpiOemTableId}"/' \
+            "$patched"
 
-      iasl -p "$out/$name" "$patched"
-    }
+          iasl -p "$out/$name" "$patched"
+        }
 
-    compile_dsl "${guestScripts}/share/barely-metal/acpi/fake_battery.dsl" "fake_battery"
-    compile_dsl "${guestScripts}/share/barely-metal/acpi/spoofed_devices.dsl" "spoofed_devices"
-  '';
+        compile_dsl "${guestScripts}/share/barely-metal/acpi/fake_battery.dsl" "fake_battery"
+        compile_dsl "${guestScripts}/share/barely-metal/acpi/spoofed_devices.dsl" "spoofed_devices"
+      '';
 
   # Resolve ACPI tables: user-specified + bundled fake battery + bundled spoofed devices
   resolvedAcpiTables =
@@ -286,11 +295,16 @@ in
 
         Resolution order: manual spoofing override > probeData > nix-facter > defaults.
       '';
-      example = lib.literalExpression ''builtins.fromJSON (builtins.readFile ./probe.json)'';
+      example = lib.literalExpression "builtins.fromJSON (builtins.readFile ./probe.json)";
     };
 
     cpu = lib.mkOption {
-      type = lib.types.nullOr (lib.types.enum [ "amd" "intel" ]);
+      type = lib.types.nullOr (
+        lib.types.enum [
+          "amd"
+          "intel"
+        ]
+      );
       default = null;
       description = "CPU vendor override. Null = auto-detect from probeData/facter.";
     };
@@ -379,10 +393,22 @@ in
         default = false;
         description = "Randomize USB device serial strings in QEMU source at build time.";
       };
-      ideModel = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
-      nvmeModel = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
-      cdModel = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
-      cfataModel = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
+      ideModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      nvmeModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      cdModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      cfataModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
 
       bootLogo = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
@@ -430,29 +456,74 @@ in
     };
 
     vm = {
-      memory = lib.mkOption { type = lib.types.int; default = 16384; description = "VM memory in MiB."; };
-      cores = lib.mkOption { type = lib.types.int; default = 4; description = "CPU cores."; };
-      threads = lib.mkOption { type = lib.types.int; default = 2; description = "Threads per core."; };
+      memory = lib.mkOption {
+        type = lib.types.int;
+        default = 16384;
+        description = "VM memory in MiB.";
+      };
+      cores = lib.mkOption {
+        type = lib.types.int;
+        default = 4;
+        description = "CPU cores.";
+      };
+      threads = lib.mkOption {
+        type = lib.types.int;
+        default = 2;
+        description = "Threads per core.";
+      };
       evdevInputs = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
         description = "Input devices for evdev passthrough.";
       };
       evdevGrabKey = lib.mkOption {
-        type = lib.types.enum [ "ctrl-ctrl" "alt-alt" "shift-shift" "meta-meta" "scrolllock" "ctrl-scrolllock" ];
+        type = lib.types.enum [
+          "ctrl-ctrl"
+          "alt-alt"
+          "shift-shift"
+          "meta-meta"
+          "scrolllock"
+          "ctrl-scrolllock"
+        ];
         default = "ctrl-ctrl";
       };
-      pciPassthrough = lib.mkOption { type = lib.types.listOf lib.types.str; default = [ ]; };
+      pciPassthrough = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+      };
       audioBackend = lib.mkOption {
-        type = lib.types.enum [ "none" "pipewire" "pulseaudio" "alsa" ];
+        type = lib.types.enum [
+          "none"
+          "pipewire"
+          "pulseaudio"
+          "alsa"
+        ];
         default = "pipewire";
       };
-      isoPath = lib.mkOption { type = lib.types.nullOr lib.types.path; default = null; };
-      diskPath = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
-      diskSize = lib.mkOption { type = lib.types.str; default = "64G"; };
-      networkMac = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
-      enableHyperVPassthrough = lib.mkOption { type = lib.types.bool; default = false; };
-      acpiTables = lib.mkOption { type = lib.types.listOf lib.types.path; default = [ ]; };
+      isoPath = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+      };
+      diskPath = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      diskSize = lib.mkOption {
+        type = lib.types.str;
+        default = "64G";
+      };
+      networkMac = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      enableHyperVPassthrough = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+      };
+      acpiTables = lib.mkOption {
+        type = lib.types.listOf lib.types.path;
+        default = [ ];
+      };
       useFakeBattery = lib.mkOption {
         type = lib.types.bool;
         default = facterLib.hasBatteryFromProbe probe;
@@ -465,7 +536,10 @@ in
       };
     };
 
-    installUtilities = lib.mkOption { type = lib.types.bool; default = true; };
+    installUtilities = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+    };
     installGuestScripts = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -491,16 +565,18 @@ in
     '';
 
     # User group membership
-    users.users = lib.listToAttrs (map (user: {
-      name = user;
-      value = {
-        extraGroups = [
-          "kvm"
-          "libvirtd"
-          "input"
-        ];
-      };
-    }) cfg.users);
+    users.users = lib.listToAttrs (
+      map (user: {
+        name = user;
+        value = {
+          extraGroups = [
+            "kvm"
+            "libvirtd"
+            "input"
+          ];
+        };
+      }) cfg.users
+    );
 
     virtualisation.libvirtd = {
       enable = true;
@@ -536,17 +612,16 @@ in
 
     security.polkit.enable = true;
 
-    environment.systemPackages =
-      [
-        patchedQemu
-        smbiosSpoofer
-        barelyMetalProbe
-        deployWrapper
-        pkgs.swtpm
-        pkgs.virt-manager
-      ]
-      ++ lib.optional cfg.installUtilities barelyMetalUtils
-      ++ lib.optional cfg.installGuestScripts guestScripts;
+    environment.systemPackages = [
+      patchedQemu
+      smbiosSpoofer
+      barelyMetalProbe
+      deployWrapper
+      pkgs.swtpm
+      pkgs.virt-manager
+    ]
+    ++ lib.optional cfg.installUtilities barelyMetalUtils
+    ++ lib.optional cfg.installGuestScripts guestScripts;
 
     systemd.tmpfiles.rules = [
       "d ${stateDir} 0750 root root -"
