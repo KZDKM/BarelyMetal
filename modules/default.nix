@@ -7,7 +7,6 @@
 
 {
   imports = [
-    (import ./vfio.nix)
     (import ./vm.nix {
       inherit
         self
@@ -17,6 +16,5 @@
         ;
     })
     (import ./looking-glass.nix)
-    (import ./kernel.nix)
   ];
 }

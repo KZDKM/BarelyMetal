@@ -104,7 +104,7 @@ let
   cpuLower = lib.toLower resolvedCpu;
 
   patchedQemu = pkgs.callPackage ../pkgs/qemu {
-    inherit autovirt;
+    inherit autovirt pkgs;
     cpu = resolvedCpu;
     acpiOemId = resolvedAcpiOemId;
     acpiOemTableId = resolvedAcpiOemTableId;

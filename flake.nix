@@ -10,7 +10,7 @@
     };
 
     qemu-src = {
-      url = "gitlab:qemu-project/qemu/v10.2.0";
+      url = "gitlab:qemu-project/qemu/v11.0.0";
       flake = false;
     };
 

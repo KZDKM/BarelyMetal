@@ -1,6 +1,7 @@
 {
   lib,
   qemu,
+  pkgs,
   autovirt,
   cpu ? "amd",
 
@@ -19,11 +20,6 @@
 
 let
   cpuLower = lib.toLower cpu;
-  patchFile =
-    if cpuLower == "amd" then
-      "${autovirt}/patches/QEMU/AMD-v10.2.0.patch"
-    else
-      "${autovirt}/patches/QEMU/Intel-v10.2.0.patch";
 
   selectedIdeModel =
     if ideModel != null then ideModel else "Samsung SSD 870 EVO 1TB";
@@ -40,7 +36,15 @@ in
 }).overrideAttrs (old: {
   pname = "barely-metal-qemu";
 
-  patches = (old.patches or []) ++ [ patchFile ];
+  src = pkgs.fetchurl {
+    url = "https://download.qemu.org/qemu-11.0.0.tar.xz";
+    hash = "sha256-wEyjYBJlPzLRHGdNNwz1KnEOfT8Ywti2PkkyBSpIVNY=";
+  };
+  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+    pkgs.python3Packages.setuptools
+    pkgs.python3Packages.wheel
+  ];
+  patches = (old.patches or []) ++ [ ./qemu.patch ];
 
   postPatch = (old.postPatch or "") + ''
     # spoof_acpi: ACPI OEM identifiers

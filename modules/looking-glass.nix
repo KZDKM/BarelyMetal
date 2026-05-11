@@ -22,10 +22,8 @@ let
 
   # Spoof as a plausible host-vendor PCI device so ivshmem doesn't
   # stick out as Red Hat VirtIO (0x1af4:0x1110).
-  spoofedVendorId =
-    if resolvedCpu == "intel" then "0x8086" else "0x1022";
-  spoofedDeviceId =
-    if resolvedCpu == "intel" then "0x0E20" else "0x1440";
+  spoofedVendorId = if resolvedCpu == "intel" then "0x8086" else "0x1022";
+  spoofedDeviceId = if resolvedCpu == "intel" then "0x0E20" else "0x42FE";
 
   baseKvmfr = config.boot.kernelPackages.kvmfr;
 
@@ -79,6 +77,7 @@ in
 
     systemd.tmpfiles.rules = [
       "f /dev/shm/looking-glass 0660 ${cfg.user} ${cfg.group} -"
+      "f /dev/kvmfr0 0660 ${cfg.user} ${cfg.group} -"
     ];
 
     boot.extraModprobeConfig = ''
